@@ -79,6 +79,33 @@
   <b>外部碎片：</b>空闲空间总量够，但分散成不连续的小块，装不下大作业（动态分区、分段）。<br>
   解决外部碎片：<b>紧凑（compaction）</b>——移动进程合并空闲区，需要动态重定位，开销大。</div>
 
+  <div class="viz">
+    <div class="viz-head"><span class="viz-title">外部碎片：总量够，但装不下</span><span class="viz-tag">可视化</span></div>
+    <div class="viz-body">
+      <div class="small muted" style="margin-bottom:4px">紧凑前：空闲总量 4 格，但分散成 4 个 1 格空洞，放不下 4 格的作业</div>
+      <div class="vblocks">
+        <div class="vblock ok lg">A(3)</div>
+        <div class="vblock hole">空</div>
+        <div class="vblock ok lg">B(2)</div>
+        <div class="vblock hole">空</div>
+        <div class="vblock ok lg">C(2)</div>
+        <div class="vblock hole">空</div>
+        <div class="vblock hole">空</div>
+        <div class="vblock warn lg">作业(4) 放不下</div>
+      </div>
+      <div class="vsplit-line"></div>
+      <div class="small muted" style="margin-bottom:4px">紧凑后：移动 B、C，把 4 个空洞合并成连续 4 格</div>
+      <div class="vblocks">
+        <div class="vblock ok lg">A(3)</div>
+        <div class="vblock ok lg">B(2)</div>
+        <div class="vblock ok lg">C(2)</div>
+        <div class="vblock on lg">空闲 4 格</div>
+        <div class="vblock ok lg">作业(4) 放入</div>
+      </div>
+      <div class="viz-note">分页没有外部碎片（页框等长，哪空放哪），只有最后一页的内部碎片；分段/动态分区才有外部碎片。</div>
+    </div>
+  </div>
+
   <h2 class="sec" id="s3">3.3 分页：把内存切成固定大小的格子</h2>
   <div class="callout life"><div class="co-title">📦 生活类比</div>
   把内存想成一排<b>统一规格的储物柜</b>（页框），把进程的地址空间切成同样大小的<b>箱子</b>（页）。箱子不用连续放，哪格空就放哪格；页表就是「我的第几号箱子放在第几号柜子」的登记表。这样外部碎片没了，只剩最后一箱没装满的内部碎片。</div>
@@ -88,7 +115,25 @@
   <div class="formula"><span class="fx-label">分页地址公式（页大小 L）</span>
   P = 逻辑地址 A ÷ L（取整）　　W = A mod L<br>
   物理地址 = 页框号 × L + W</div>
-  <p>若逻辑地址 32 位、页大小 4KB（2¹²），则页内偏移占 12 位，页号占 20 位，页表最多有 2²⁰ = 1M 项。若每项 4B，单级页表就要 4MB。</p>
+
+  <div class="viz">
+    <div class="viz-head"><span class="viz-title">逻辑地址就是一根「切片条」</span><span class="viz-tag">可视化</span></div>
+    <div class="viz-body">
+      <div class="vflow" style="gap:0;align-items:stretch">
+        <div class="vbox hot" style="flex:20;border-radius:10px 0 0 10px"><b>页号 P</b><small>高位 · 20 位</small></div>
+        <div class="vbox ok" style="flex:12;border-radius:0 10px 10px 0"><b>页内偏移 W</b><small>低位 · 12 位</small></div>
+      </div>
+      <div class="viz-note" style="margin-top:10px">32 位地址 + 4KB 页：偏移 12 位，页号 20 位 → 页表 2²⁰ 项。</div>
+      <div class="vsplit-line"></div>
+      <div class="vflow">
+        <div class="vbox accent"><b>0x1A2F</b><small>逻辑地址</small></div>
+        <span class="varrow">→ 拆 →</span>
+        <div class="vbox hot"><b>P = 6</b><small>页号（高位）</small></div>
+        <div class="vbox ok"><b>W = 559</b><small>低 10 位 = 0x22F</small></div>
+      </div>
+      <div class="viz-note">页大小 1KB 时偏移 10 位；页大小 4KB 时偏移 12 位。先看页大小，再决定切几刀。</div>
+    </div>
+  </div>
 
   <h3 class="sub">3.3.2 页表与地址变换</h3>
   <p>页表存放在内存中，页表基址寄存器（PTBR/PTR）指向当前进程页表，页表长度寄存器（PTLR）防止越界。一次访存要<b>两次访问内存</b>：先查页表得到页框号，再访问目标数据。页表项通常包含：页框号 + 存在位 + 访问位 + 修改位 + 保护位 + 外存地址（请求分页时）。</p>
@@ -105,6 +150,38 @@
   <div class="formula"><span class="fx-label">TLB 命中率 α、TLB 访问时间 t、内存访问时间 m</span>
   EAT = α × (t + m) + (1 − α) × (t + 2m)<br>
   若忽略 t：EAT = α × m + (1 − α) × 2m = (2 − α) × m</div>
+
+  <div class="viz">
+    <div class="viz-head"><span class="viz-title">TLB 命中与未命中，差一次访存</span><span class="viz-tag">可视化</span></div>
+    <div class="viz-body">
+      <div class="vcompare">
+        <div>
+          <h5>命中（概率 α）</h5>
+          <div class="vflow">
+            <div class="vbox hot"><b>CPU</b><small>逻辑地址</small></div>
+            <span class="varrow">→</span>
+            <div class="vbox ok"><b>TLB</b><small>直接给页框号</small></div>
+            <span class="varrow">→</span>
+            <div class="vbox"><b>内存</b><small>访问数据 1 次</small></div>
+          </div>
+        </div>
+        <div>
+          <h5>未命中（概率 1−α）</h5>
+          <div class="vflow">
+            <div class="vbox hot"><b>CPU</b><small>逻辑地址</small></div>
+            <span class="varrow">→</span>
+            <div class="vbox warn"><b>TLB</b><small>没有</small></div>
+            <span class="varrow">→</span>
+            <div class="vbox accent"><b>页表</b><small>查页框号</small></div>
+            <span class="varrow">→</span>
+            <div class="vbox"><b>内存</b><small>访问数据</small></div>
+          </div>
+        </div>
+      </div>
+      <div class="viz-note">命中：1 次访存；未命中：先查页表再访存 = 2 次。EAT = α×m + (1−α)×2m。TLB 越大、局部性越好，α 越高。</div>
+    </div>
+  </div>
+
   <p>进程切换时要处理 TLB：全部刷新（简单但开销大）或给 TLB 项加 <b>ASID</b>（地址空间标识）区分不同进程（现代 CPU 常用）。</p>
 
   <h3 class="sub">3.3.4 多级页表</h3>
@@ -112,6 +189,28 @@
   <div class="callout exam"><div class="co-title">📌 例题：32 位地址、4KB 页、4B 页表项</div>
   页内偏移 12 位，页号 20 位。每页可放 4KB / 4B = 1024 个页表项（10 位）。把 20 位页号拆成 <b>10 位 + 10 位</b>，就是两级页表：一级页表 1024 项，每个二级页表 1024 项。<br>
   若采用 48 位地址、4KB 页、8B 页表项：偏移 12 位，页号 36 位，每页 512 项（9 位），通常拆成 9+9+9+9 四级页表。</div>
+
+  <div class="viz">
+    <div class="viz-head"><span class="viz-title">两级页表：把 4MB 拆成按需分配</span><span class="viz-tag">可视化</span></div>
+    <div class="viz-body">
+      <div class="vflow" style="gap:0;align-items:stretch">
+        <div class="vbox hot" style="flex:10;border-radius:10px 0 0 10px"><b>一级页号</b><small>10 位</small></div>
+        <div class="vbox accent" style="flex:10"><b>二级页号</b><small>10 位</small></div>
+        <div class="vbox ok" style="flex:12;border-radius:0 10px 10px 0"><b>页内偏移</b><small>12 位</small></div>
+      </div>
+      <div class="vsplit-line"></div>
+      <div class="vflow">
+        <div class="vbox hot"><b>一级页表</b><small>1024 项 · 4KB</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox accent"><b>二级页表</b><small>只给用到的区域分配</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox"><b>页框</b><small>1024 项/表</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox ok"><b>数据页</b><small>4KB</small></div>
+      </div>
+      <div class="viz-note">单级页表要连续 4MB；两级页表顶级表 4KB 常驻，二级表按需分配。代价：无 TLB 时地址转换多一次访存。</div>
+    </div>
+  </div>
 
   <h2 class="sec" id="s4">3.4 分段与段页式</h2>
   <h3 class="sub">3.4.1 分段：按逻辑意义切</h3>
@@ -273,6 +372,24 @@
     <div class="step">缺页中断处理完要重新执行原指令，不是下一条。</div>
     <div class="step">虚拟内存最大容量由地址位数决定，实际容量受内存+外存限制。</div>
     <div class="step">抖动不是「有缺页」，而是缺页率过高导致系统忙于换页。</div>
+  </div>
+
+  <div class="viz">
+    <div class="viz-head"><span class="viz-title">本章一张图：一个地址的冒险</span><span class="viz-tag">复习</span></div>
+    <div class="viz-body">
+      <div class="vflow">
+        <div class="vbox accent"><b>逻辑地址</b><small>页号 + 偏移</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox hot"><b>TLB</b><small>命中直接拿</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox"><b>页表</b><small>未命中才查</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox ok"><b>物理地址</b><small>页框 × 页大小 + 偏移</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox warn"><b>缺页？</b><small>调页 + 置换</small></div>
+      </div>
+      <div class="viz-note">若页不在内存 → 缺页异常 → 有空闲页框就调入，没有就按 FIFO/LRU/OPT 置换 → 更新页表/TLB → 重新执行原指令。页框长期不够 → 抖动。</div>
+    </div>
   </div>
 
   <h2 class="sec" id="quiz">📝 章内练习（16 题 · 基础 → 提高 → 真题改编）</h2>

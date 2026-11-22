@@ -59,6 +59,31 @@
     </table>
   </div>
 
+  <div class="viz">
+    <div class="viz-head"><span class="viz-title">一张时间轴看懂：并发 vs 并行</span><span class="viz-tag">可视化</span></div>
+    <div class="viz-desc">横轴是时间。单核上 A、B 只能交替（并发）；双核上 A、B 可以同时跑（并行）。</div>
+    <div class="viz-body">
+      <div class="vtl">
+        <div class="vtl-row"><span class="vtl-label">单核 CPU1</span><div class="vtl-track">
+          <div class="vtl-seg" style="left:0;width:25%;background:var(--brand)">A</div>
+          <div class="vtl-seg" style="left:25%;width:25%;background:var(--accent)">B</div>
+          <div class="vtl-seg" style="left:50%;width:25%;background:var(--brand)">A</div>
+          <div class="vtl-seg" style="left:75%;width:25%;background:var(--accent)">B</div>
+        </div></div>
+        <div class="vtl-row"><span class="vtl-label">单核 CPU2</span><div class="vtl-track"><div class="vtl-seg" style="left:0;width:100%;background:var(--bg-soft);color:var(--ink-3)">空闲（不存在第二个核）</div></div></div>
+        <div class="vtl-axis"><span>0</span><span>时间 →</span></div>
+      </div>
+      <div class="vsplit-line"></div>
+      <div class="vtl">
+        <div class="vtl-row"><span class="vtl-label">双核 CPU1</span><div class="vtl-track"><div class="vtl-seg" style="left:0;width:100%;background:var(--brand)">A 一直运行</div></div></div>
+        <div class="vtl-row"><span class="vtl-label">双核 CPU2</span><div class="vtl-track"><div class="vtl-seg" style="left:0;width:100%;background:var(--accent)">B 一直运行</div></div></div>
+        <div class="vtl-axis"><span>0</span><span>时间 →</span></div>
+      </div>
+      <div class="vlegend"><span><i style="background:var(--brand)"></i>进程 A</span><span><i style="background:var(--accent)"></i>进程 B</span><span>单核：宏观同时、微观串行；双核：同一时刻真正同时</span></div>
+    </div>
+    <div class="viz-note">判断题口诀：问「同一时刻」→ 并行；问「同一时间间隔」→ 并发。</div>
+  </div>
+
   <div class="callout warn"><div class="co-title">⚠️ 并发与并行，选择题年年换皮</div>
   <b>并发：</b>同一时间间隔内，宏观上同时发生（单核也能并发）。<br>
   <b>并行：</b>同一时刻，真正同时发生（必须多核或多处理机）。<br>
@@ -92,6 +117,34 @@
 
   <div class="callout exam"><div class="co-title">📌 多道批处理为什么能提高利用率？</div>
   当一道程序因 I/O 而阻塞时，CPU 立刻切换去执行另一道程序，让 CPU 与 I/O 设备重叠工作。注意：<b>多道程序的道数不是越多越好</b>——内存装不下会频繁换入换出，反而抖动。多道批处理是「并发」概念真正落地的地方，也带来了同步、死锁、保护等新问题。</div>
+
+  <div class="viz">
+    <div class="viz-head"><span class="viz-title">多道程序：CPU 与 I/O 怎么重叠</span><span class="viz-tag">可视化</span></div>
+    <div class="viz-desc">A 做 I/O 时 CPU 去跑 B，B 做 I/O 时 CPU 回来跑 A。CPU 不再空等设备。</div>
+    <div class="viz-body">
+      <div class="vtl">
+        <div class="vtl-row"><span class="vtl-label">程序 A</span><div class="vtl-track">
+          <div class="vtl-seg" style="left:0;width:30%;background:var(--brand)">CPU 计算</div>
+          <div class="vtl-seg" style="left:30%;width:40%;background:var(--accent);color:#3a2500">I/O 等待</div>
+          <div class="vtl-seg" style="left:70%;width:30%;background:var(--brand)">CPU 计算</div>
+        </div></div>
+        <div class="vtl-row"><span class="vtl-label">程序 B</span><div class="vtl-track">
+          <div class="vtl-seg" style="left:0;width:20%;background:var(--accent);color:#3a2500">I/O</div>
+          <div class="vtl-seg" style="left:20%;width:40%;background:var(--brand-2)">CPU 计算</div>
+          <div class="vtl-seg" style="left:60%;width:40%;background:var(--accent);color:#3a2500">I/O 等待</div>
+        </div></div>
+        <div class="vtl-row"><span class="vtl-label">CPU 实际</span><div class="vtl-track">
+          <div class="vtl-seg" style="left:0;width:30%;background:var(--brand)">跑 A</div>
+          <div class="vtl-seg" style="left:30%;width:30%;background:var(--brand-2)">跑 B</div>
+          <div class="vtl-seg" style="left:60%;width:10%;background:var(--bg-soft);color:var(--ink-3)">空闲</div>
+          <div class="vtl-seg" style="left:70%;width:30%;background:var(--brand)">跑 A</div>
+        </div></div>
+        <div class="vtl-axis"><span>0</span><span>时间 →</span></div>
+      </div>
+      <div class="vlegend"><span><i style="background:var(--brand)"></i>程序 A 的 CPU</span><span><i style="background:var(--brand-2)"></i>程序 B 的 CPU</span><span><i style="background:var(--accent)"></i>I/O</span></div>
+    </div>
+    <div class="viz-note">多道的本质：用「切换」把设备的等待时间填给另一道程序；道数过多会导致内存不足、换入换出频繁，利用率反而下降。</div>
+  </div>
 
   <h3 class="sub">分时系统的四个特点（背）</h3>
   <p><b>多路性</b>（多个终端同时连）、<b>独立性</b>（用户彼此感觉独占）、<b>及时性</b>（较短时间得到响应）、<b>交互性</b>（人机对话）。实时系统的关键词则是<b>及时性 + 可靠性 + 截止时间</b>，硬实时必须严格满足，软实时可以偶尔超时。</p>
@@ -257,6 +310,24 @@
     <div class="step">缺页是内中断（故障），不是外中断；键盘输入才是外中断。</div>
     <div class="step">微内核不是「更小所以更快」，而是更可靠但切换开销更大。</div>
     <div class="step">MBR 在磁盘 0 号扇区，先于 OS 运行；它不等于「操作系统内核」。</div>
+  </div>
+
+  <div class="viz">
+    <div class="viz-head"><span class="viz-title">本章一张图：从裸机到系统调用</span><span class="viz-tag">复习</span></div>
+    <div class="viz-body">
+      <div class="vflow">
+        <div class="vbox accent"><b>裸机</b><small>CPU/内存/设备</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox"><b>引导</b><small>BIOS → MBR → 内核</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox hot"><b>OS 内核</b><small>四管理 + 两接口</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox ok"><b>用户程序</b><small>用户态</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox violet"><b>陷入内核</b><small>中断/异常/系统调用</small></div>
+      </div>
+      <div class="viz-note">把这张图背下来：OS 是硬件与应用之间的「总管」，用户程序只能通过三个入口请求内核服务。</div>
+    </div>
   </div>
 
   <h2 class="sec" id="quiz">📝 章内练习（16 题 · 基础 → 提高 → 真题改编）</h2>

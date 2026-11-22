@@ -70,6 +70,37 @@
   </div>
   <p><b>保护</b>常用访问控制列表（ACL）和权限位（Linux 的 rwxr-xr-x）。权限位分所有者/组/其他人三组，分别控制读、写、执行。</p>
 
+  <div class="viz">
+    <div class="viz-head"><span class="viz-title">硬链接 vs 软链接：到底谁指向谁</span><span class="viz-tag">可视化</span></div>
+    <div class="viz-body">
+      <div class="vcompare">
+        <div>
+          <h5>硬链接：两个名字，一个 inode</h5>
+          <div class="vflow">
+            <div class="vbox">目录项 a.txt<small>inode 42</small></div>
+            <div class="vbox">目录项 b.txt<small>inode 42</small></div>
+            <span class="varrow">→</span>
+            <div class="vbox hot"><b>inode 42</b><small>链接计数 = 2</small></div>
+            <span class="varrow">→</span>
+            <div class="vbox ok"><b>数据块</b><small>5, 8, 12</small></div>
+          </div>
+          <div class="viz-note">删除 a.txt 只是计数 2→1，数据仍在；计数归零才真正删除。</div>
+        </div>
+        <div>
+          <h5>软链接：一个存路径的新文件</h5>
+          <div class="vflow">
+            <div class="vbox">目录项 link<small>inode 77</small></div>
+            <span class="varrow">→</span>
+            <div class="vbox accent"><b>inode 77</b><small>内容是 "/a.txt"</small></div>
+            <span class="varrow">→</span>
+            <div class="vbox hot"><b>inode 42</b><small>真正的文件</small></div>
+          </div>
+          <div class="viz-note">原文件删除后，link 还在，但解析路径失败——悬空链接。软链接可以跨文件系统。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <h2 class="sec" id="s2">4.2 文件的逻辑结构：用户看到的样子</h2>
   <div class="tbl-wrap">
     <table class="tbl">
@@ -91,6 +122,35 @@
       <tr><td><b>链接分配（显式 FAT）</b></td><td>把所有「下一块」指针集中到文件分配表 FAT，FAT 常驻内存</td><td>支持随机访问（沿 FAT 跳）；无外部碎片</td><td>FAT 占内存；FAT 表项数 = 磁盘块数</td></tr>
       <tr><td><b>索引分配</b></td><td>为文件建索引块，存放该文件所有块的块号</td><td>支持随机访问，文件可动态增长</td><td>索引块占空间；大文件需多级/混合索引</td></tr>
     </table>
+  </div>
+
+  <div class="viz">
+    <div class="viz-head"><span class="viz-title">三种文件分配：连续、链接、索引</span><span class="viz-tag">可视化</span></div>
+    <div class="viz-body">
+      <div class="vcompare">
+        <div>
+          <h5>连续分配</h5>
+          <div class="vblocks">
+            <div class="vblock on">5</div><div class="vblock on">6</div><div class="vblock on">7</div><div class="vblock on">8</div>
+          </div>
+          <div class="viz-note">块连续：随机访问快，但有外部碎片，扩展难。</div>
+        </div>
+        <div>
+          <h5>链接分配</h5>
+          <div class="vblocks">
+            <div class="vblock hot">5</div><span class="varrow">→</span><div class="vblock hot">12</div><span class="varrow">→</span><div class="vblock hot">3</div><span class="varrow">→</span><div class="vblock hot">9</div>
+          </div>
+          <div class="viz-note">每块存下一块指针：灵活，但隐式链接只能顺序读。</div>
+        </div>
+        <div>
+          <h5>索引分配</h5>
+          <div class="vblocks">
+            <div class="vblock accent" style="min-width:104px;height:52px">索引块<br>12,3,9,20</div><span class="varrow">→</span><div class="vblock">12</div><div class="vblock">3</div><div class="vblock">9</div><div class="vblock">20</div>
+          </div>
+          <div class="viz-note">索引块登记所有块号：可随机访问，但多占索引块。</div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <h3 class="sub">4.3.1 FAT 计算</h3>
@@ -123,6 +183,24 @@
   设字长为 n 位，块号从 0 开始：<b>字号 = 块号 ÷ n</b>，<b>位号 = 块号 mod n</b>。<br>
   若块号从 1 开始：字号 = (块号−1) ÷ n，位号 = (块号−1) mod n + 1。<br>
   例：字长 32，块号 100（从 0 开始）→ 字号 3，位号 4。位示图大小 = 磁盘块数 ÷ 8 字节（每块 1 位）。</div>
+
+  <div class="viz">
+    <div class="viz-head"><span class="viz-title">位示图：块号 100 落在哪一位</span><span class="viz-tag">可视化</span></div>
+    <div class="viz-body">
+      <div class="small muted" style="margin-bottom:6px">字长 32 位，字 3 覆盖块 96~127；块 100 是这一字的第 4 位（位号从 0 开始）。</div>
+      <div class="vflow" style="gap:4px">
+        <div class="vbox" style="min-width:56px;padding:4px 6px"><small>块 96</small><b>0</b></div>
+        <div class="vbox" style="min-width:56px;padding:4px 6px"><small>块 97</small><b>0</b></div>
+        <div class="vbox" style="min-width:56px;padding:4px 6px"><small>块 98</small><b>0</b></div>
+        <div class="vbox" style="min-width:56px;padding:4px 6px"><small>块 99</small><b>0</b></div>
+        <div class="vbox hot" style="min-width:56px;padding:4px 6px"><small>块 100</small><b>1</b></div>
+        <div class="vbox" style="min-width:56px;padding:4px 6px"><small>块 101</small><b>0</b></div>
+        <div class="vbox" style="min-width:56px;padding:4px 6px"><small>块 102</small><b>0</b></div>
+        <div class="vbox" style="min-width:56px;padding:4px 6px"><small>块 103</small><b>0</b></div>
+      </div>
+      <div class="viz-note">字号 = 100 ÷ 32 = 3；位号 = 100 mod 32 = 4。位示图 1 表示占用、0 表示空闲；找连续空闲块时按字扫描最快。</div>
+    </div>
+  </div>
 
   <h2 class="sec" id="s5">4.5 文件系统布局、挂载与 VFS</h2>
   <div class="steps">
@@ -269,6 +347,24 @@
     <div class="step">位示图注意块号从 0 还是从 1 开始，公式差 1。</div>
     <div class="step">磁盘存取时间三项都要算；平均旋转延迟是半圈，不是一圈。</div>
     <div class="step">SCAN 到端点是否算移动距离，看题目定义；408 通常算实际移动。</div>
+  </div>
+
+  <div class="viz">
+    <div class="viz-head"><span class="viz-title">本章一张图：从文件名到磁盘块</span><span class="viz-tag">复习</span></div>
+    <div class="viz-body">
+      <div class="vflow">
+        <div class="vbox accent"><b>文件名</b><small>用户视角</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox"><b>目录项</b><small>名字 → inode 号</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox hot"><b>inode</b><small>权限/大小/块指针</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox ok"><b>数据块</b><small>连续/链接/索引</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox violet"><b>磁盘调度</b><small>FCFS/SSTF/SCAN</small></div>
+      </div>
+      <div class="viz-note">文件系统三件事：怎么找到（目录 + inode）、怎么放（分配方式）、怎么省（空闲空间管理）；最后落到磁盘怎么读写。</div>
+    </div>
   </div>
 
   <h2 class="sec" id="quiz">📝 章内练习（16 题 · 基础 → 提高 → 真题改编）</h2>

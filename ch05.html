@@ -71,6 +71,26 @@
   <b>通道：</b>设备干完一整套任务才按一次铃。<br>
   判断口诀：<b>看「CPU 干预频率」和「传输单位」</b>，不要只背名字。</div>
 
+  <div class="lab" id="lab-io">
+    <div class="lab-title">四种 I/O 方式：CPU 到底闲不闲 <span class="chip">时间轴</span></div>
+    <div class="lab-desc">假设传输 4 个数据块（每块 4KB，共 16KB）。切换方式，观察 CPU 时间轴与干预次数。</div>
+    <div class="lab-stage">
+      <div class="lab-tabs" id="io-tabs">
+        <button data-io="query" class="on">程序查询</button>
+        <button data-io="interrupt">中断驱动</button>
+        <button data-io="dma">DMA</button>
+        <button data-io="channel">通道</button>
+      </div>
+      <div id="io-timeline"></div>
+      <div class="head-stats" id="io-stats"></div>
+      <div class="vlegend" style="margin-top:8px"><span><i style="background:var(--green)"></i>CPU 做别的事</span><span><i style="background:var(--red)"></i>CPU 处理 I/O</span><span><i style="background:var(--accent)"></i>设备传输</span></div>
+    </div>
+    <div class="lab-ctrl">
+      <button id="io-run">重新演示</button>
+    </div>
+    <div class="lab-note" id="io-note"></div>
+  </div>
+
   <h3 class="sub">DMA 的三种工作方式</h3>
   <p><b>停止 CPU 访存：</b>DMA 传输时 CPU 不能访存，简单但 CPU 停顿。<b>周期挪用：</b>DMA 每次抢一个总线周期，CPU 只被短暂延迟，最常用。<b>交替访问：</b>CPU 与 DMA 分时使用总线，效率高但硬件复杂。DMA 传输结束后通过中断通知 CPU。</p>
 
@@ -82,6 +102,21 @@
     <div class="step"><b>中断处理程序。</b>设备完成/出错时保存现场、处理中断、唤醒等待进程。</div>
     <div class="step"><b>硬件。</b>设备控制器与设备本身。</div>
   </div>
+
+  <div class="viz">
+    <div class="viz-head"><span class="viz-title">I/O 软件四层：谁管抽象、谁管硬件</span><span class="viz-tag">可视化</span></div>
+    <div class="viz-body">
+      <div class="vlayers">
+        <div class="vlayer" style="background:var(--green-soft);border-color:transparent"><b>用户层 I/O 软件</b> <small>库函数 printf/read · SPOOLing 用户接口</small></div>
+        <div class="vlayer" style="background:var(--accent-soft);border-color:transparent"><b>设备独立性软件</b> <small>逻辑设备名 → 物理设备 · 缓冲 · 缓存 · SPOOLing · 保护</small></div>
+        <div class="vlayer" style="background:var(--brand-soft);border-color:transparent"><b>设备驱动程序</b> <small>读写控制器寄存器 · 启动设备 · 设备特有操作</small></div>
+        <div class="vlayer" style="background:var(--violet-soft);border-color:transparent"><b>中断处理程序</b> <small>保存现场 · 处理完成/错误 · 唤醒进程</small></div>
+        <div class="vlayer"><b>硬件</b> <small>I/O 控制器 + 设备</small></div>
+      </div>
+      <div class="viz-note">越往上越抽象、越与设备无关；越往下越接近硬件。设备独立性软件负责「叫什么名字」，设备驱动程序负责「怎么操作」。</div>
+    </div>
+  </div>
+
   <div class="callout exam"><div class="co-title">📌 设备独立性软件 vs 设备驱动程序</div>
   <b>设备独立性软件：</b>与具体设备无关，负责「逻辑设备名 → 物理设备」映射（LUT 表）、缓冲、缓存、SPOOLing、权限检查。<br>
   <b>设备驱动程序：</b>与具体设备强相关，负责「怎么操作这台设备」——寄存器地址、命令字、时序。<br>
@@ -132,6 +167,32 @@
     <div class="step">SPOOLing 系统为每个请求创建一个「虚拟打印机」，进程立刻认为打印完成，可以继续运行。</div>
     <div class="step">缓输出程序按队列顺序从输出井取数据，真正驱动打印机输出。</div>
     <div class="step">打印机是独占的，但多个进程可以「同时」提交打印任务，互不阻塞。</div>
+  </div>
+
+  <div class="viz">
+    <div class="viz-head"><span class="viz-title">SPOOLing：一台打印机怎么被「分身」</span><span class="viz-tag">可视化</span></div>
+    <div class="viz-body">
+      <div class="vflow">
+        <div class="vbox hot"><b>进程 P1</b><small>打印请求</small></div>
+        <div class="vbox hot"><b>进程 P2</b><small>打印请求</small></div>
+        <div class="vbox hot"><b>进程 P3</b><small>打印请求</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox accent"><b>输出井</b><small>磁盘上的排队文件</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox violet"><b>缓输出程序</b><small>按队列顺序取</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox ok"><b>打印机</b><small>独占设备，逐个打印</small></div>
+      </div>
+      <div class="vsplit-line"></div>
+      <div class="vflow">
+        <div class="vbox"><b>输入设备</b><small>键盘/读卡机</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox accent"><b>输入井</b><small>预输入程序提前读入</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox hot"><b>用户进程</b><small>直接从输入井读</small></div>
+      </div>
+      <div class="viz-note">SPOOLing 需要磁盘（井）+ 通道（并行搬运）+ 中断（通知完成）。它把「独占设备」虚拟成「共享设备」，用户进程不用等慢设备。</div>
+    </div>
   </div>
   <div class="callout exam"><div class="co-title">📌 SPOOLing 的条件与代价</div>
   需要：<b>磁盘</b>（存放输入井/输出井）、<b>通道</b>（让数据搬运与 CPU 并行）、<b>中断</b>（通知完成）。<br>
@@ -201,6 +262,24 @@
     <div class="step">缓冲（buffer）匹配速度；缓存（cache）减少访问。两者不是一回事。</div>
     <div class="step">SPOOLing 需要磁盘和通道，把独占设备虚拟成共享设备；它不是普通内存缓冲。</div>
     <div class="step">设备分配四张表：SDT、DCT、COCT、CHCT；静态分配简单但利用率低，动态分配可能死锁。</div>
+  </div>
+
+  <div class="viz">
+    <div class="viz-head"><span class="viz-title">本章一张图：一次读盘的接力</span><span class="viz-tag">复习</span></div>
+    <div class="viz-body">
+      <div class="vflow">
+        <div class="vbox accent"><b>CPU</b><small>发起 read</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox"><b>控制器</b><small>数据/控制/状态寄存器</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox hot"><b>设备</b><small>查询/中断/DMA/通道</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox ok"><b>驱动 + 中断</b><small>启动与完成通知</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox violet"><b>缓冲/SPOOLing</b><small>速度匹配与共享</small></div>
+      </div>
+      <div class="viz-note">主线：CPU 通过控制器指挥设备 → 用越来越省心的方式等完成 → 用缓冲抹平速度差 → 用 SPOOLing 把独占设备变共享。</div>
+    </div>
   </div>
 
   <h2 class="sec" id="quiz">📝 章内练习（16 题 · 基础 → 提高 → 真题改编）</h2>
@@ -477,6 +556,92 @@
     run();
   });
   run();
+})();
+
+/* 实验室：四种 I/O 方式时间轴 */
+(function () {
+  var tabs = document.getElementById("io-tabs");
+  if (!tabs) return;
+  var tl = document.getElementById("io-timeline");
+  var stats = document.getElementById("io-stats");
+  var note = document.getElementById("io-note");
+  var current = "query";
+
+  var device = [
+    { s: 0, w: 25, c: "var(--accent)", t: "块 1" },
+    { s: 25, w: 25, c: "var(--accent)", t: "块 2" },
+    { s: 50, w: 25, c: "var(--accent)", t: "块 3" },
+    { s: 75, w: 25, c: "var(--accent)", t: "块 4" }
+  ];
+  var MODES = {
+    query: {
+      name: "程序查询",
+      count: "持续忙等（CPU 全程被占用）",
+      cpu: [{ s: 0, w: 100, c: "var(--red)", t: "忙等设备 + 搬数据" }],
+      note: "设备没就绪时，CPU 原地循环读状态寄存器；CPU 利用率最低，只适合简单低速设备。"
+    },
+    interrupt: {
+      name: "中断驱动",
+      count: "16 次（每 1KB 一次）",
+      cpu: [
+        { s: 0, w: 18, c: "var(--green)", t: "其他工作" }, { s: 18, w: 2, c: "var(--red)" },
+        { s: 20, w: 22, c: "var(--green)", t: "其他工作" }, { s: 42, w: 2, c: "var(--red)" },
+        { s: 44, w: 22, c: "var(--green)", t: "其他工作" }, { s: 66, w: 2, c: "var(--red)" },
+        { s: 68, w: 22, c: "var(--green)", t: "其他工作" }, { s: 90, w: 2, c: "var(--red)" },
+        { s: 92, w: 8, c: "var(--green)" }
+      ],
+      note: "CPU 不必忙等，但每 1KB 一次中断；16KB 数据共 16 次中断，频繁切换仍有开销。"
+    },
+    dma: {
+      name: "DMA",
+      count: "4 次（每 4KB 块一次）",
+      cpu: [
+        { s: 0, w: 22, c: "var(--green)", t: "其他工作" }, { s: 22, w: 2, c: "var(--red)" },
+        { s: 24, w: 23, c: "var(--green)", t: "其他工作" }, { s: 47, w: 2, c: "var(--red)" },
+        { s: 49, w: 23, c: "var(--green)", t: "其他工作" }, { s: 72, w: 2, c: "var(--red)" },
+        { s: 74, w: 23, c: "var(--green)", t: "其他工作" }, { s: 97, w: 2, c: "var(--red)" },
+        { s: 99, w: 1, c: "var(--green)" }
+      ],
+      note: "DMA 控制器直接搬 4KB 块，CPU 每块只处理一次中断；16KB 共 4 次，数据搬运不占 CPU。"
+    },
+    channel: {
+      name: "通道",
+      count: "1 次（整组 I/O 一次）",
+      cpu: [
+        { s: 0, w: 94, c: "var(--green)", t: "其他工作" },
+        { s: 94, w: 3, c: "var(--red)" },
+        { s: 97, w: 3, c: "var(--green)" }
+      ],
+      note: "通道执行通道程序，控制多台设备完成一整组 I/O 后才中断一次；CPU 几乎不干预。"
+    }
+  };
+
+  function row(label, segs) {
+    var html = '<div class="vtl-row"><span class="vtl-label">' + label + '</span><div class="vtl-track">';
+    segs.forEach(function (x) {
+      html += '<div class="vtl-seg" style="left:' + x.s + '%;width:' + x.w + '%;background:' + x.c + '">' + (x.w >= 8 && x.t ? x.t : "") + "</div>";
+    });
+    return html + "</div></div>";
+  }
+  function render(key) {
+    current = key;
+    var m = MODES[key];
+    var occupied = m.cpu.filter(function (x) { return x.c.indexOf("red") >= 0; })
+      .reduce(function (a, x) { return a + x.w; }, 0);
+    tl.innerHTML = '<div class="vtl">' + row("CPU", m.cpu) + row("设备", device) +
+      '<div class="vtl-axis"><span>0</span><span>时间 → 16KB 传输完成</span></div></div>';
+    stats.innerHTML = "<span>方式 <b>" + m.name + "</b></span><span>CPU 干预 <b>" + m.count + "</b></span><span>CPU 被 I/O 占用 <b>" + occupied + "%</b></span>";
+    note.textContent = m.note;
+    tabs.querySelectorAll("button").forEach(function (b) {
+      b.classList.toggle("on", b.getAttribute("data-io") === key);
+    });
+  }
+  tabs.addEventListener("click", function (ev) {
+    var b = ev.target.closest("[data-io]");
+    if (b) render(b.getAttribute("data-io"));
+  });
+  document.getElementById("io-run").addEventListener("click", function () { render(current); });
+  render("query");
 })();
 </script>
 </body>

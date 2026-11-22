@@ -147,6 +147,19 @@
     </div>
   </div>
 
+  <div class="viz">
+    <div class="viz-head"><span class="viz-title">线程到底共享什么、私有什么</span><span class="viz-tag">可视化</span></div>
+    <div class="viz-body">
+      <div class="vbox ok" style="margin-bottom:8px"><b>进程地址空间（三个线程共享）</b><small>代码段 · 全局变量 · 堆 · 打开文件表 · 当前目录</small></div>
+      <div class="vflow">
+        <div class="vbox hot"><b>线程 T1</b><small>PC / 寄存器<br>栈 / 局部变量<br>线程 ID</small></div>
+        <div class="vbox hot"><b>线程 T2</b><small>PC / 寄存器<br>栈 / 局部变量<br>线程 ID</small></div>
+        <div class="vbox hot"><b>线程 T3</b><small>PC / 寄存器<br>栈 / 局部变量<br>线程 ID</small></div>
+      </div>
+      <div class="viz-note">记忆：<b>栈、寄存器、PC 私有；代码、全局、堆、文件共享</b>。所以线程切换只换私有现场，不换页表。</div>
+    </div>
+  </div>
+
   <h3 class="sub">用户级线程 vs 内核级线程</h3>
   <div class="tbl-wrap">
     <table class="tbl">
@@ -291,6 +304,26 @@ Consumer:
   如果生产者先拿到 mutex，再发现 empty=0 而被阻塞，此时 mutex 还在它手里；消费者想来取数据时被 mutex 挡在门外，无法执行 <code class="inline">V(empty)</code> 唤醒生产者——<b>互相等待，死锁</b>。<br>
   口诀：<b>先资源信号量，后互斥信号量</b>；P 的顺序不能反，V 的顺序无所谓。</div>
 
+  <div class="lab" id="lab-pv">
+    <div class="lab-title">PV 可视化：缓冲区、信号量到底怎么变 <span class="chip">生产者-消费者</span></div>
+    <div class="lab-desc">点「生产」或「消费」，观察 empty / full / mutex 三个信号量和缓冲区槽位。缓冲区大小为 3；满了生产会阻塞，空了消费会阻塞。</div>
+    <div class="lab-stage">
+      <div class="vflow" style="justify-content:center;margin-bottom:12px">
+        <div class="vbox hot" id="pv-empty"><b>empty = 3</b><small>空位数量</small></div>
+        <div class="vbox ok" id="pv-full"><b>full = 0</b><small>数据数量</small></div>
+        <div class="vbox accent" id="pv-mutex"><b>mutex = 1</b><small>缓冲区互斥</small></div>
+      </div>
+      <div id="pv-buffer" class="vblocks" style="justify-content:center"></div>
+      <div class="state-log" id="pv-log"><div>初始：缓冲区空，empty=3，full=0，mutex=1。点「生产」开始。</div></div>
+    </div>
+    <div class="lab-ctrl">
+      <button id="pv-produce">生产者：放入一个</button>
+      <button id="pv-consume" class="ghost">消费者：取出一个</button>
+      <button id="pv-reset" class="ghost">重置</button>
+    </div>
+    <div class="lab-note" id="pv-note">关键：生产者的 P(empty) 必须在 P(mutex) 之前；否则缓冲区满时持有 mutex 阻塞，消费者进不来，死锁。</div>
+  </div>
+
   <h3 class="sub">2.8.4 读者-写者（读者优先版）</h3>
   <pre class="code">int count = 0;          // 当前读者数
 semaphore mutex = 1;    // 保护 count
@@ -353,6 +386,36 @@ Writer:
   Available = (3, 3, 2)。各进程 Need：P0(7,4,3)、P1(1,2,2)、P2(6,0,0)、P3(0,1,1)、P4(4,3,1)。<br>
   Work=(3,3,2) → P1 Need(1,2,2) 可满足，完成后 Work=(5,3,2) → P3(0,1,1) 完成，Work=(7,4,3) → P4(4,3,1) 完成，Work=(7,4,5) → P0(7,4,3) 完成，Work=(7,5,5) → P2(6,0,0) 完成。<br>
   安全序列：<b>P1 → P3 → P4 → P0 → P2</b>（答案不唯一）。</div>
+
+  <div class="viz">
+    <div class="viz-head"><span class="viz-title">银行家算法：Work 怎么一步步变大</span><span class="viz-tag">可视化</span></div>
+    <div class="viz-body">
+      <div class="vflow">
+        <div class="vbox accent"><b>Work</b><small>(3,3,2)</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox ok"><b>P1 完成</b><small>Need (1,2,2)</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox accent"><b>Work</b><small>(5,3,2)</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox ok"><b>P3 完成</b><small>Need (0,1,1)</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox accent"><b>Work</b><small>(7,4,3)</small></div>
+      </div>
+      <div class="vflow" style="margin-top:8px">
+        <span class="varrow">→</span>
+        <div class="vbox ok"><b>P4 完成</b><small>Need (4,3,1)</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox accent"><b>Work</b><small>(7,4,5)</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox ok"><b>P0 完成</b><small>Need (7,4,3)</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox accent"><b>Work</b><small>(7,5,5)</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox ok"><b>P2 完成</b><small>Need (6,0,0)</small></div>
+      </div>
+      <div class="viz-note">每一步只做一件事：找 <b>Need ≤ Work</b> 的进程 → 让它完成 → <b>Work += Allocation</b> → 重复。所有进程都能完成，才是安全状态。</div>
+    </div>
+  </div>
   <p><b>请求资源时：</b>① 检查 Request ≤ Need；② 检查 Request ≤ Available；③ 试探性分配（Available −= Request，Allocation += Request，Need −= Request）；④ 跑安全性算法；安全则正式分配，不安全则回滚并让进程等待。</p>
 
   <h2 class="sec" id="deep">🚀 进阶深挖（教材级）</h2>
@@ -448,6 +511,24 @@ Writer:
     <div class="step">S.value < 0 时，绝对值才是等待进程数，不是资源数。</div>
     <div class="step">银行家算法「安全」只是「存在安全序列」，不是「一定不死锁」；不安全状态一定可能死锁。</div>
     <div class="step">单实例资源分配图有环 ⇔ 死锁；多实例有环不一定。</div>
+  </div>
+
+  <div class="viz">
+    <div class="viz-head"><span class="viz-title">本章一张图：进程的一生与协作</span><span class="viz-tag">复习</span></div>
+    <div class="viz-body">
+      <div class="vflow">
+        <div class="vbox accent"><b>程序</b><small>静态菜谱</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox hot"><b>进程 + PCB</b><small>动态执行</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox ok"><b>五状态</b><small>就绪/运行/阻塞</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox violet"><b>调度</b><small>谁上 CPU</small></div>
+        <span class="varrow">→</span>
+        <div class="vbox warn"><b>同步/死锁</b><small>PV / 银行家</small></div>
+      </div>
+      <div class="viz-note">主线：程序变成进程 → 进程有状态 → 状态由调度驱动 → 并发进程需要同步 → 同步不当会死锁。</div>
+    </div>
   </div>
 
   <h2 class="sec" id="quiz">📝 章内练习（16 题 · 基础 → 提高 → 真题改编）</h2>
@@ -875,6 +956,81 @@ Writer:
     simulate(); render();
   });
   simulate(); render();
+})();
+
+/* PV 可视化：生产者-消费者 */
+(function () {
+  var empty = 3, full = 0, mutex = 1, slots = [null, null, null], nextItem = 1;
+  var emptyEl = document.getElementById("pv-empty");
+  var fullEl = document.getElementById("pv-full");
+  var mutexEl = document.getElementById("pv-mutex");
+  var bufEl = document.getElementById("pv-buffer");
+  var logEl = document.getElementById("pv-log");
+  var noteEl = document.getElementById("pv-note");
+  if (!emptyEl) return;
+
+  function say(text, bad) {
+    var d = document.createElement("div");
+    d.textContent = text;
+    d.style.color = bad ? "var(--red)" : "var(--ink-2)";
+    logEl.appendChild(d);
+    while (logEl.children.length > 24) logEl.removeChild(logEl.firstChild);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+  function paint() {
+    emptyEl.innerHTML = "<b>empty = " + empty + "</b><small>空位数量</small>";
+    fullEl.innerHTML = "<b>full = " + full + "</b><small>数据数量</small>";
+    mutexEl.innerHTML = "<b>mutex = " + mutex + "</b><small>缓冲区互斥</small>";
+    emptyEl.className = "vbox " + (empty > 0 ? "hot" : "warn");
+    fullEl.className = "vbox " + (full > 0 ? "ok" : "warn");
+    mutexEl.className = "vbox " + (mutex === 1 ? "accent" : "warn");
+    bufEl.innerHTML = slots.map(function (v, i) {
+      return '<div class="vblock ' + (v === null ? "hole" : "on") + '">' + (v === null ? "空" : v) + "</div>";
+    }).join("");
+  }
+  function produce() {
+    if (empty <= 0) {
+      say("P(empty)：empty=0 → 生产者阻塞（缓冲区已满，等待空位）", true);
+      noteEl.textContent = "缓冲区满：生产者被阻塞。这正是 P(empty) 必须放在 P(mutex) 之前的原因。";
+      return;
+    }
+    var e0 = empty; empty--; say("P(empty)：empty " + e0 + " → " + empty);
+    mutex--; say("P(mutex)：mutex 1 → 0，进入临界区");
+    var idx = slots.indexOf(null);
+    slots[idx] = nextItem;
+    say("放入数据 " + nextItem + " 到槽 " + (idx + 1));
+    nextItem++;
+    mutex++; say("V(mutex)：mutex 0 → 1，离开临界区");
+    var f0 = full; full++; say("V(full)：full " + f0 + " → " + full + "，通知消费者");
+    paint();
+    noteEl.textContent = "当前缓冲区 " + full + "/3。生产者先申请空位，再进临界区；放完数据后 V(full) 通知消费者。";
+  }
+  function consume() {
+    if (full <= 0) {
+      say("P(full)：full=0 → 消费者阻塞（缓冲区为空，等待数据）", true);
+      noteEl.textContent = "缓冲区空：消费者被阻塞。等生产者放入数据并 V(full) 后才能继续。";
+      return;
+    }
+    var f0 = full; full--; say("P(full)：full " + f0 + " → " + full);
+    mutex--; say("P(mutex)：mutex 1 → 0，进入临界区");
+    var idx = slots.findIndex(function (v) { return v !== null; });
+    var v = slots[idx]; slots[idx] = null;
+    say("从槽 " + (idx + 1) + " 取出数据 " + v);
+    mutex++; say("V(mutex)：mutex 0 → 1，离开临界区");
+    var e0 = empty; empty++; say("V(empty)：empty " + e0 + " → " + empty + "，通知生产者");
+    paint();
+    noteEl.textContent = "当前缓冲区 " + full + "/3。消费者先申请数据，再进临界区；取完后 V(empty) 通知生产者。";
+  }
+  function reset() {
+    empty = 3; full = 0; mutex = 1; slots = [null, null, null]; nextItem = 1;
+    logEl.innerHTML = "<div>已重置：缓冲区空，empty=3，full=0，mutex=1。</div>";
+    noteEl.textContent = "关键：生产者的 P(empty) 必须在 P(mutex) 之前；否则缓冲区满时持有 mutex 阻塞，消费者进不来，死锁。";
+    paint();
+  }
+  document.getElementById("pv-produce").addEventListener("click", produce);
+  document.getElementById("pv-consume").addEventListener("click", consume);
+  document.getElementById("pv-reset").addEventListener("click", reset);
+  paint();
 })();
 </script>
 </body>
