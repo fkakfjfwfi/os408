@@ -305,7 +305,7 @@ Consumer:
   口诀：<b>先资源信号量，后互斥信号量</b>；P 的顺序不能反，V 的顺序无所谓。</div>
 
   <div class="lab" id="lab-pv">
-    <div class="lab-title">PV 可视化：缓冲区、信号量到底怎么变 <span class="chip">生产者-消费者</span></div>
+    <div class="lab-title">PV 可视化：缓冲区、信号量到底怎么变 <span class="chip">生产者-消费者</span><span class="chip new">可播放演示</span></div>
     <div class="lab-desc">点「生产」或「消费」，观察 empty / full / mutex 三个信号量和缓冲区槽位。缓冲区大小为 3；满了生产会阻塞，空了消费会阻塞。</div>
     <div class="lab-stage">
       <div class="vflow" style="justify-content:center;margin-bottom:12px">
@@ -321,6 +321,15 @@ Consumer:
       <button id="pv-consume" class="ghost">消费者：取出一个</button>
       <button id="pv-reset" class="ghost">重置</button>
     </div>
+    <div class="demo-bar">
+      <button id="pv-play" class="primary">▶ 播放演示</button>
+      <button id="pv-pause" class="ghost">⏸ 暂停</button>
+      <button id="pv-prev" class="ghost">⏮ 上一步</button>
+      <button id="pv-next" class="ghost">⏭ 下一步</button>
+      <span class="demo-step" id="pv-step">0 / 0</span>
+    </div>
+    <div class="demo-cap" id="pv-cap">点「播放演示」，自动走一遍生产、阻塞、消费、再生产的完整过程。</div>
+    <div class="demo-progress"><i id="pv-progress"></i></div>
     <div class="lab-note" id="pv-note">关键：生产者的 P(empty) 必须在 P(mutex) 之前；否则缓冲区满时持有 mutex 阻塞，消费者进不来，死锁。</div>
   </div>
 
@@ -969,6 +978,14 @@ Writer:
   var noteEl = document.getElementById("pv-note");
   if (!emptyEl) return;
 
+  var demo = [], demoLog = [], demoPos = 0, demoLen = 0, demoTimer = null, manualMode = false;
+  var capEl = document.getElementById("pv-cap");
+  var stepEl = document.getElementById("pv-step");
+  var progEl = document.getElementById("pv-progress");
+  var pauseBtn = document.getElementById("pv-pause");
+  var prevBtn = document.getElementById("pv-prev");
+  var nextBtn = document.getElementById("pv-next");
+
   function say(text, bad) {
     var d = document.createElement("div");
     d.textContent = text;
@@ -989,6 +1006,7 @@ Writer:
     }).join("");
   }
   function produce() {
+    pauseDemo(); manualMode = true; updateUI();
     if (empty <= 0) {
       say("P(empty)：empty=0 → 生产者阻塞（缓冲区已满，等待空位）", true);
       noteEl.textContent = "缓冲区满：生产者被阻塞。这正是 P(empty) 必须放在 P(mutex) 之前的原因。";
@@ -1006,6 +1024,7 @@ Writer:
     noteEl.textContent = "当前缓冲区 " + full + "/3。生产者先申请空位，再进临界区；放完数据后 V(full) 通知消费者。";
   }
   function consume() {
+    pauseDemo(); manualMode = true; updateUI();
     if (full <= 0) {
       say("P(full)：full=0 → 消费者阻塞（缓冲区为空，等待数据）", true);
       noteEl.textContent = "缓冲区空：消费者被阻塞。等生产者放入数据并 V(full) 后才能继续。";
@@ -1021,16 +1040,115 @@ Writer:
     paint();
     noteEl.textContent = "当前缓冲区 " + full + "/3。消费者先申请数据，再进临界区；取完后 V(empty) 通知生产者。";
   }
-  function reset() {
+  function pauseDemo() {
+    if (demoTimer) { clearTimeout(demoTimer); demoTimer = null; }
+  }
+  function updateUI() {
+    if (manualMode) {
+      stepEl.textContent = "手动模式";
+      progEl.style.width = "0%";
+    } else {
+      stepEl.textContent = demoLen ? (demoPos + 1) + " / " + demoLen : "0 / 0";
+      progEl.style.width = demoLen ? ((demoPos + 1) / demoLen * 100) + "%" : "0%";
+    }
+    pauseBtn.disabled = false;
+    prevBtn.disabled = !manualMode && demoPos <= 0;
+    nextBtn.disabled = !manualMode && demoPos >= demoLen - 1;
+  }
+  function snapshot(cap, line) {
+    if (line) demoLog.push(line);
+    demo.push({
+      empty: empty, full: full, mutex: mutex, slots: slots.slice(),
+      nextItem: nextItem, cap: cap, logs: demoLog.slice()
+    });
+  }
+  function buildDemo() {
+    demo = []; demoLog = [];
     empty = 3; full = 0; mutex = 1; slots = [null, null, null]; nextItem = 1;
-    logEl.innerHTML = "<div>已重置：缓冲区空，empty=3，full=0，mutex=1。</div>";
-    noteEl.textContent = "关键：生产者的 P(empty) 必须在 P(mutex) 之前；否则缓冲区满时持有 mutex 阻塞，消费者进不来，死锁。";
+    snapshot("初始：empty=3，full=0，mutex=1，缓冲区为空。", "初始：缓冲区空，empty=3，full=0，mutex=1。");
+    function stepProduce() {
+      if (empty <= 0) {
+        snapshot("<b>缓冲区满</b>：生产者执行 P(empty) 被阻塞，缓冲区没有变化。", "P(empty)：empty=0 → 生产者阻塞");
+        return;
+      }
+      var e0 = empty; empty--; mutex--;
+      snapshot("生产者执行 <b>P(empty)</b>（" + e0 + "→" + empty + "）和 <b>P(mutex)</b>（1→0），进入临界区。",
+        "P(empty)：empty " + e0 + " → " + empty + "；P(mutex)：1 → 0，进入临界区");
+      var idx = slots.indexOf(null);
+      var v = nextItem; slots[idx] = v; nextItem++; mutex++; full++;
+      snapshot("把数据 " + v + " 放入槽 " + (idx + 1) + "，再 <b>V(mutex)</b>、<b>V(full)</b> 通知消费者。",
+        "放入数据 " + v + " 到槽 " + (idx + 1) + "；V(mutex)：0 → 1；V(full)：" + (full - 1) + " → " + full);
+    }
+    function stepConsume() {
+      if (full <= 0) {
+        snapshot("<b>缓冲区空</b>：消费者执行 P(full) 被阻塞，缓冲区没有变化。", "P(full)：full=0 → 消费者阻塞");
+        return;
+      }
+      var f0 = full; full--; mutex--;
+      snapshot("消费者执行 <b>P(full)</b>（" + f0 + "→" + full + "）和 <b>P(mutex)</b>（1→0），进入临界区。",
+        "P(full)：full " + f0 + " → " + full + "；P(mutex)：1 → 0，进入临界区");
+      var idx = slots.findIndex(function (v) { return v !== null; });
+      var v = slots[idx]; slots[idx] = null; mutex++; empty++;
+      snapshot("从槽 " + (idx + 1) + " 取出数据 " + v + "，再 <b>V(mutex)</b>、<b>V(empty)</b> 通知生产者。",
+        "取出数据 " + v + " 从槽 " + (idx + 1) + "；V(mutex)：0 → 1；V(empty)：" + (empty - 1) + " → " + empty);
+    }
+    stepProduce(); stepProduce(); stepProduce();
+    stepProduce();              // 第 4 次：满，阻塞
+    stepConsume();              // 取走 1，唤醒生产者
+    stepProduce();              // 放入 4
+    stepConsume();              // 再取走 4
+    demoLen = demo.length;
+  }
+  function applyDemo(i) {
+    if (!demoLen) buildDemo();
+    demoPos = Math.max(0, Math.min(demoLen - 1, i));
+    manualMode = false;
+    var s = demo[demoPos];
+    empty = s.empty; full = s.full; mutex = s.mutex; slots = s.slots.slice(); nextItem = s.nextItem;
     paint();
+    capEl.innerHTML = s.cap;
+    logEl.innerHTML = s.logs.map(function (t) { return "<div>" + t + "</div>"; }).join("");
+    logEl.scrollTop = logEl.scrollHeight;
+    noteEl.textContent = "演示第 " + (demoPos + 1) + " 步 / 共 " + demoLen + " 步。";
+    updateUI();
+  }
+  function playDemo() {
+    pauseDemo();
+    if (!demoLen) buildDemo();
+    manualMode = false;
+    if (demoPos >= demoLen - 1) demoPos = 0;
+    applyDemo(demoPos);
+    demoTimer = setTimeout(function tick() {
+      if (!demoTimer) return;
+      if (demoPos >= demoLen - 1) { pauseDemo(); updateUI(); return; }
+      applyDemo(demoPos + 1);
+      demoTimer = setTimeout(tick, 1600);
+    }, 900);
+    updateUI();
+  }
+  function reset() {
+    pauseDemo();
+    manualMode = false;
+    buildDemo();
+    applyDemo(0);
+    noteEl.textContent = "关键：生产者的 P(empty) 必须在 P(mutex) 之前；否则缓冲区满时持有 mutex 阻塞，消费者进不来，死锁。";
   }
   document.getElementById("pv-produce").addEventListener("click", produce);
   document.getElementById("pv-consume").addEventListener("click", consume);
   document.getElementById("pv-reset").addEventListener("click", reset);
-  paint();
+  document.getElementById("pv-play").addEventListener("click", playDemo);
+  pauseBtn.addEventListener("click", function () { pauseDemo(); updateUI(); });
+  prevBtn.addEventListener("click", function () {
+    pauseDemo();
+    applyDemo(manualMode ? 0 : demoPos - 1);
+  });
+  nextBtn.addEventListener("click", function () {
+    pauseDemo();
+    applyDemo(manualMode ? 0 : demoPos + 1);
+  });
+  buildDemo();
+  applyDemo(0);
+  noteEl.textContent = "关键：生产者的 P(empty) 必须在 P(mutex) 之前；否则缓冲区满时持有 mutex 阻塞，消费者进不来，死锁。";
 })();
 </script>
 </body>

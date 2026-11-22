@@ -72,7 +72,7 @@
   判断口诀：<b>看「CPU 干预频率」和「传输单位」</b>，不要只背名字。</div>
 
   <div class="lab" id="lab-io">
-    <div class="lab-title">四种 I/O 方式：CPU 到底闲不闲 <span class="chip">时间轴</span></div>
+    <div class="lab-title">四种 I/O 方式：CPU 到底闲不闲 <span class="chip">时间轴</span><span class="chip new">可播放演示</span></div>
     <div class="lab-desc">假设传输 4 个数据块（每块 4KB，共 16KB）。切换方式，观察 CPU 时间轴与干预次数。</div>
     <div class="lab-stage">
       <div class="lab-tabs" id="io-tabs">
@@ -86,8 +86,17 @@
       <div class="vlegend" style="margin-top:8px"><span><i style="background:var(--green)"></i>CPU 做别的事</span><span><i style="background:var(--red)"></i>CPU 处理 I/O</span><span><i style="background:var(--accent)"></i>设备传输</span></div>
     </div>
     <div class="lab-ctrl">
-      <button id="io-run">重新演示</button>
+      <button id="io-run">重置当前模式</button>
     </div>
+    <div class="demo-bar">
+      <button id="io-play" class="primary">▶ 播放演示</button>
+      <button id="io-pause" class="ghost">⏸ 暂停</button>
+      <button id="io-prev" class="ghost">⏮ 上一模式</button>
+      <button id="io-next" class="ghost">⏭ 下一模式</button>
+      <span class="demo-step" id="io-step">1 / 4</span>
+    </div>
+    <div class="demo-cap" id="io-cap">点「播放演示」，自动对比四种 I/O 方式的 CPU 占用与中断次数。</div>
+    <div class="demo-progress"><i id="io-progress"></i></div>
     <div class="lab-note" id="io-note"></div>
   </div>
 
@@ -565,7 +574,15 @@
   var tl = document.getElementById("io-timeline");
   var stats = document.getElementById("io-stats");
   var note = document.getElementById("io-note");
+  var capEl = document.getElementById("io-cap");
+  var stepEl = document.getElementById("io-step");
+  var progEl = document.getElementById("io-progress");
+  var pauseBtn = document.getElementById("io-pause");
+  var prevBtn = document.getElementById("io-prev");
+  var nextBtn = document.getElementById("io-next");
   var current = "query";
+  var demoKeys = ["query", "interrupt", "dma", "channel"];
+  var demoIdx = 0, playing = false, startTime = 0, raf = 0, progressP = 1, DUR = 5200;
 
   var device = [
     { s: 0, w: 25, c: "var(--accent)", t: "块 1" },
@@ -576,12 +593,16 @@
   var MODES = {
     query: {
       name: "程序查询",
+      total: 0,
+      caption: "CPU 一直循环读状态寄存器，设备传输 16KB 期间 CPU 全程被占用。",
       count: "持续忙等（CPU 全程被占用）",
       cpu: [{ s: 0, w: 100, c: "var(--red)", t: "忙等设备 + 搬数据" }],
       note: "设备没就绪时，CPU 原地循环读状态寄存器；CPU 利用率最低，只适合简单低速设备。"
     },
     interrupt: {
       name: "中断驱动",
+      total: 16,
+      caption: "每传 1KB 中断一次，16KB 共 16 次；红色小段是 CPU 处理中断。",
       count: "16 次（每 1KB 一次）",
       cpu: [
         { s: 0, w: 18, c: "var(--green)", t: "其他工作" }, { s: 18, w: 2, c: "var(--red)" },
@@ -594,6 +615,8 @@
     },
     dma: {
       name: "DMA",
+      total: 4,
+      caption: "DMA 一次搬 4KB，每块结束中断一次，共 4 次；CPU 不参与字节搬运。",
       count: "4 次（每 4KB 块一次）",
       cpu: [
         { s: 0, w: 22, c: "var(--green)", t: "其他工作" }, { s: 22, w: 2, c: "var(--red)" },
@@ -606,6 +629,8 @@
     },
     channel: {
       name: "通道",
+      total: 1,
+      caption: "通道执行通道程序，整组 I/O 完成才中断 1 次；CPU 几乎全程做别的事。",
       count: "1 次（整组 I/O 一次）",
       cpu: [
         { s: 0, w: 94, c: "var(--green)", t: "其他工作" },
@@ -621,27 +646,103 @@
     segs.forEach(function (x) {
       html += '<div class="vtl-seg" style="left:' + x.s + '%;width:' + x.w + '%;background:' + x.c + '">' + (x.w >= 8 && x.t ? x.t : "") + "</div>";
     });
-    return html + "</div></div>";
+    return html + '<div class="vtl-head" style="left:100%"></div></div></div>';
   }
-  function render(key) {
-    current = key;
+  function updateFrame(key, p) {
     var m = MODES[key];
     var occupied = m.cpu.filter(function (x) { return x.c.indexOf("red") >= 0; })
       .reduce(function (a, x) { return a + x.w; }, 0);
+    tl.querySelectorAll(".vtl-head").forEach(function (h) { h.style.left = (p * 100) + "%"; });
+    var count = m.total ? Math.round(m.total * p) + " / " + m.total + " 次" : "持续忙等";
+    stats.innerHTML = "<span>方式 <b>" + m.name + "</b></span>" +
+      "<span>进度 <b>" + Math.round(p * 100) + "%</b></span>" +
+      "<span>CPU 干预 <b>" + count + "</b></span>" +
+      "<span>CPU 被 I/O 占用 <b>" + occupied + "%</b></span>";
+    progEl.style.width = (p * 100) + "%";
+  }
+  function render(key, p) {
+    current = key;
+    var m = MODES[key];
     tl.innerHTML = '<div class="vtl">' + row("CPU", m.cpu) + row("设备", device) +
       '<div class="vtl-axis"><span>0</span><span>时间 → 16KB 传输完成</span></div></div>';
-    stats.innerHTML = "<span>方式 <b>" + m.name + "</b></span><span>CPU 干预 <b>" + m.count + "</b></span><span>CPU 被 I/O 占用 <b>" + occupied + "%</b></span>";
-    note.textContent = m.note;
     tabs.querySelectorAll("button").forEach(function (b) {
       b.classList.toggle("on", b.getAttribute("data-io") === key);
     });
+    stepEl.textContent = (demoKeys.indexOf(key) + 1) + " / " + demoKeys.length;
+    capEl.innerHTML = "<b>" + m.name + "</b>：" + m.caption;
+    note.textContent = m.note;
+    updateFrame(key, p === undefined ? 1 : p);
+  }
+  function stopDemo() {
+    playing = false;
+    cancelAnimationFrame(raf);
+    updateButtons();
+  }
+  function updateButtons() {
+    pauseBtn.disabled = !playing;
+  }
+  function tick(now) {
+    if (!playing) return;
+    if (!startTime) startTime = now;
+    var p = Math.min(1, (now - startTime) / DUR);
+    progressP = p;
+    updateFrame(demoKeys[demoIdx], p);
+    if (p >= 1) {
+      if (demoIdx < demoKeys.length - 1) {
+        demoIdx++;
+        render(demoKeys[demoIdx], 0);
+        startTime = now;
+        raf = requestAnimationFrame(tick);
+      } else {
+        playing = false;
+        updateButtons();
+      }
+    } else {
+      raf = requestAnimationFrame(tick);
+    }
+  }
+  function playDemo() {
+    stopDemo();
+    if (demoIdx >= demoKeys.length - 1 && progressP >= 1) demoIdx = 0;
+    playing = true;
+    progressP = 0;
+    render(demoKeys[demoIdx], 0);
+    startTime = 0;
+    updateButtons();
+    raf = requestAnimationFrame(tick);
   }
   tabs.addEventListener("click", function (ev) {
     var b = ev.target.closest("[data-io]");
-    if (b) render(b.getAttribute("data-io"));
+    if (!b) return;
+    stopDemo();
+    var key = b.getAttribute("data-io");
+    demoIdx = demoKeys.indexOf(key);
+    progressP = 1;
+    render(key, 1);
+    updateButtons();
   });
-  document.getElementById("io-run").addEventListener("click", function () { render(current); });
-  render("query");
+  document.getElementById("io-run").addEventListener("click", function () {
+    stopDemo();
+    progressP = 0;
+    render(current, 0);
+    updateButtons();
+  });
+  document.getElementById("io-play").addEventListener("click", playDemo);
+  pauseBtn.addEventListener("click", function () { stopDemo(); });
+  prevBtn.addEventListener("click", function () {
+    stopDemo();
+    demoIdx = Math.max(0, demoIdx - 1);
+    progressP = 0;
+    render(demoKeys[demoIdx], 0);
+  });
+  nextBtn.addEventListener("click", function () {
+    stopDemo();
+    demoIdx = Math.min(demoKeys.length - 1, demoIdx + 1);
+    progressP = 0;
+    render(demoKeys[demoIdx], 0);
+  });
+  render("query", 1);
+  updateButtons();
 })();
 </script>
 </body>

@@ -540,6 +540,8 @@ table.tbl .num { font-family: Consolas, monospace; }
 .vtl-track { position: relative; flex: 1; height: 26px; background: var(--bg-soft); border-radius: 6px; overflow: hidden; }
 .vtl-seg { position: absolute; top: 2px; bottom: 2px; border-radius: 4px; font-size: 10.5px; color: #fff; display: flex; align-items: center; justify-content: center; white-space: nowrap; overflow: hidden; }
 .vtl-axis { display: flex; justify-content: space-between; margin-left: 78px; font-size: 10.5px; color: var(--ink-3); font-family: Consolas, monospace; }
+.vtl-head { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--red); z-index: 3; transition: left .1s linear; }
+.vtl-head::before { content: ""; position: absolute; top: -4px; left: -4px; width: 10px; height: 10px; border-radius: 50%; background: var(--red); }
 .vlegend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 11.5px; color: var(--ink-3); margin-top: 8px; }
 .vlegend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
 
@@ -575,6 +577,25 @@ table.tbl .num { font-family: Consolas, monospace; }
 .vpill.red { background: var(--red-soft); color: var(--red); }
 .vpill.green { background: var(--green-soft); color: var(--green); }
 .vpill.accent { background: var(--accent-soft); color: var(--accent); }
+
+/* ── 实验室内嵌「演示视频」控制条 ── */
+.demo-bar { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.demo-bar button {
+  border: 1px solid var(--line); background: var(--card-2); color: var(--ink-2);
+  border-radius: 8px; padding: 6px 11px; font-size: 12.5px; cursor: pointer; transition: all .15s;
+}
+.demo-bar button:hover { border-color: var(--brand); color: var(--brand); }
+.demo-bar button.primary { background: var(--brand); border-color: var(--brand); color: #fff; font-weight: 700; }
+.demo-bar button:disabled { opacity: .4; cursor: not-allowed; }
+.demo-step { margin-left: auto; font-size: 11.5px; color: var(--ink-3); font-family: Consolas, monospace; }
+.demo-cap {
+  margin-top: 8px; padding: 8px 12px; min-height: 38px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 9px;
+  font-size: 13px; color: var(--ink-2); line-height: 1.55;
+}
+.demo-cap b { color: var(--brand); }
+.demo-progress { height: 6px; background: var(--bg-soft); border-radius: 999px; overflow: hidden; margin-top: 8px; }
+.demo-progress i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--brand), var(--brand-2)); transition: width .12s linear; }
 
 @media (max-width: 640px) {
   .viz { padding: 13px 14px; }
