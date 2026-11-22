@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第 3 章 内存管理 · 408 操作系统可视化课堂</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<nav class="topbar"><div class="topbar-inner">
+  <a class="logo" href="index.html"><span class="dot"></span>408 操作系统可视化课堂</a>
+  <div class="nav-links">
+    <a href="index.html">总览</a><a href="ch01.html">系统概述</a><a href="ch02.html">进程与线程</a><a href="ch03.html">内存管理</a><a href="ch04.html">文件管理</a><a href="ch05.html">I/O 管理</a><a href="practice.html">练习场</a><a href="method.html">备考方法论</a><a href="resources.html">资源导航</a>
+  </div>
+  <button class="theme-btn" title="切换明暗主题">🌙</button>
+</div></nav>
+
+<div class="wrap">
+  <div class="hero">
+    <h1>第 3 章 · 内存管理</h1>
+    <p>内存管理是 408 大题最稳定的来源：地址转换、页表大小、缺页率、页面置换，几乎每年换着花样考。本章先把「地址怎么翻译」讲透，再讲「内存不够怎么办」。</p>
+    <p class="tagline">预计学习 7~9 小时 · 动画 1 集 · 实验室 2 个 · 练习 16 题 · 打卡 6 项</p>
+  </div>
+
+  <div class="toc"><span class="toc-label">本页导航</span><a href="#goal">学习目标</a><a href="#s1">地址与装入</a><a href="#s2">连续分配</a><a href="#s3">分页</a><a href="#s4">分段与段页式</a><a href="#s5">虚拟内存</a><a href="#s6">页面置换</a><a href="#s7">抖动与工作集</a><a href="#deep">进阶深挖</a><a href="#lesson">动画课堂</a><a href="#lab1">地址转换</a><a href="#lab2">页面置换</a><a href="#pit">避坑清单</a><a href="#quiz">章内练习</a><a href="#ck">打卡</a></div>
+
+  <div class="callout exam" id="goal"><div class="co-title">🎯 学习目标（学完你应该能）</div>
+  ① 区分逻辑地址/物理地址、内部碎片/外部碎片，说清三种装入方式；<br>
+  ② 给定页大小与逻辑地址，手算页号、页内偏移、物理地址；<br>
+  ③ 计算页表项数、页表大小、多级页表的级数与各级位数；<br>
+  ④ 说清分页与分段的区别、段页式的三次访存；<br>
+  ⑤ 用 FIFO/LRU/OPT/CLOCK 手算缺页次数与缺页率，解释 Belady 异常；<br>
+  ⑥ 解释抖动与工作集，知道固定/可变分配、局部/全局置换的区别。</div>
+
+  <h2 class="sec" id="s1">3.1 地址、装入与内存保护</h2>
+  <div class="callout life"><div class="co-title">🏠 生活类比</div>
+  你写的程序以为自己住在一栋从 0 号房间开始的大楼里（<b>逻辑地址</b>）；实际酒店把你这层安排在了另一栋楼的 8 层（<b>物理地址</b>）。<b>MMU（内存管理单元）</b>就是前台：你报「我住 302」，它查表换算成「实际是 B 栋 1203」，你不需要知道真实位置。</div>
+
+  <h3 class="sub">3.1.1 程序的装入与链接</h3>
+  <p>源程序要经过<b>编译 → 链接 → 装入</b>才能运行。装入方式决定地址什么时候转换：</p>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>装入方式</th><th>地址转换时机</th><th>特点</th></tr>
+      <tr><td>绝对装入</td><td>编译时就知道物理地址</td><td>只适合单道程序，程序换位置就崩</td></tr>
+      <tr><td>可重定位装入（静态重定位）</td><td>装入时一次性把逻辑地址改成物理地址</td><td>实现简单；运行中不能移动，难以支持虚拟内存</td></tr>
+      <tr><td>动态运行时装入（动态重定位）</td><td>每条指令执行时由硬件转换</td><td>需要重定位寄存器/MMU；支持移动、换出、虚拟内存</td></tr>
+    </table>
+  </div>
+  <p><b>链接</b>分静态链接、装入时动态链接、运行时动态链接。运行时动态链接按需加载共享库，节省内存，是动态库（.dll/.so）的基础。</p>
+
+  <h3 class="sub">3.1.2 内存保护</h3>
+  <p>两种常见做法：① <b>上下限寄存器</b>：CPU 检查每个地址是否在 [下限, 上限] 内；② <b>重定位寄存器 + 界地址寄存器</b>：重定位寄存器存基址，界地址寄存器存长度，物理地址 = 逻辑地址 + 基址，且逻辑地址 &lt; 长度。越界就触发异常。分页/分段系统还会在页表项/段表项里放保护位（读/写/执行）。</p>
+
+  <h3 class="sub">3.1.3 覆盖与交换</h3>
+  <p><b>覆盖（overlay）</b>是进程内部的技巧：把程序按逻辑分成若干段，常用的常驻内存，不常用的段共用同一块内存，需要时换入。需要程序员显式声明覆盖结构，早期内存紧张时用。<b>交换（swapping）</b>是进程级的：把整个进程换出到外存，腾出内存给别的进程；换入时再恢复。交换需要动态重定位支持，且换出/换入的 I/O 开销很大。</p>
+
+  <h2 class="sec" id="s2">3.2 连续分配：一整块给你</h2>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>方式</th><th>做法</th><th>碎片</th><th>缺点</th></tr>
+      <tr><td>单一连续分配</td><td>内存分系统区和用户区，用户区只放一道程序</td><td>内部碎片</td><td>只能单道，利用率低</td></tr>
+      <tr><td>固定分区分配</td><td>用户区预先切成若干固定大小分区，每个分区放一道作业</td><td>内部碎片</td><td>分区大小难匹配，浪费；分区数固定</td></tr>
+      <tr><td>动态分区分配</td><td>按作业需要动态切分，用空闲分区表/链管理</td><td>外部碎片</td><td>反复分配回收后产生很多小空洞，需紧凑</td></tr>
+    </table>
+  </div>
+
+  <h3 class="sub">动态分区的四种分配算法（选择题高频）</h3>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>算法</th><th>空闲区排序</th><th>做法</th><th>优点</th><th>缺点</th></tr>
+      <tr><td>首次适应（First Fit）</td><td>地址递增</td><td>从低地址找第一个够大的</td><td>简单、通常性能最好，保留高地址大块</td><td>低地址碎片多，查找开销随碎片增加</td></tr>
+      <tr><td>最佳适应（Best Fit）</td><td>容量递增</td><td>找能满足的最小空闲区</td><td>看起来最省空间</td><td>留下大量难以利用的小碎片，外部碎片最多</td></tr>
+      <tr><td>最坏适应（Worst Fit）</td><td>容量递减</td><td>找最大的空闲区切分</td><td>剩余块仍较大，减少小碎片</td><td>大分区很快被耗尽，后续大作业无法装入</td></tr>
+      <tr><td>邻近适应（Next Fit）</td><td>地址递增 + 循环指针</td><td>从上次结束位置继续找</td><td>分配更均匀，减少低地址碎片</td><td>高地址大块被切碎，整体性能常不如首次适应</td></tr>
+    </table>
+  </div>
+  <div class="callout exam"><div class="co-title">📌 内部碎片 vs 外部碎片</div>
+  <b>内部碎片：</b>分配给进程的空间里没用完的部分（固定分区、分页的最后一页）。<br>
+  <b>外部碎片：</b>空闲空间总量够，但分散成不连续的小块，装不下大作业（动态分区、分段）。<br>
+  解决外部碎片：<b>紧凑（compaction）</b>——移动进程合并空闲区，需要动态重定位，开销大。</div>
+
+  <h2 class="sec" id="s3">3.3 分页：把内存切成固定大小的格子</h2>
+  <div class="callout life"><div class="co-title">📦 生活类比</div>
+  把内存想成一排<b>统一规格的储物柜</b>（页框），把进程的地址空间切成同样大小的<b>箱子</b>（页）。箱子不用连续放，哪格空就放哪格；页表就是「我的第几号箱子放在第几号柜子」的登记表。这样外部碎片没了，只剩最后一箱没装满的内部碎片。</div>
+
+  <h3 class="sub">3.3.1 页、页框与地址结构</h3>
+  <p>页（页面）是进程地址空间的等长块，页框（物理块）是内存的等长块，二者大小相同（通常 4KB）。逻辑地址被拆成 <b>页号 P + 页内偏移 W</b>：</p>
+  <div class="formula"><span class="fx-label">分页地址公式（页大小 L）</span>
+  P = 逻辑地址 A ÷ L（取整）　　W = A mod L<br>
+  物理地址 = 页框号 × L + W</div>
+  <p>若逻辑地址 32 位、页大小 4KB（2¹²），则页内偏移占 12 位，页号占 20 位，页表最多有 2²⁰ = 1M 项。若每项 4B，单级页表就要 4MB。</p>
+
+  <h3 class="sub">3.3.2 页表与地址变换</h3>
+  <p>页表存放在内存中，页表基址寄存器（PTBR/PTR）指向当前进程页表，页表长度寄存器（PTLR）防止越界。一次访存要<b>两次访问内存</b>：先查页表得到页框号，再访问目标数据。页表项通常包含：页框号 + 存在位 + 访问位 + 修改位 + 保护位 + 外存地址（请求分页时）。</p>
+  <div class="steps">
+    <div class="step">CPU 给出逻辑地址 A，按页大小拆成页号 P 和偏移 W。</div>
+    <div class="step">检查 P 是否越界（P ≥ 页表长度则越界异常）。</div>
+    <div class="step">用 PTBR + P × 页表项大小 找到页表项，读出页框号 F。</div>
+    <div class="step">若存在位为 0，触发缺页异常（虚拟内存）；否则物理地址 = F × L + W。</div>
+    <div class="step">用物理地址访问内存；若 TLB 命中，第 3 步可省去一次访存。</div>
+  </div>
+
+  <h3 class="sub">3.3.3 快表 TLB</h3>
+  <p>TLB（Translation Lookaside Buffer）是 CPU 内的小型相联存储器，缓存最近用过的页表项。命中时直接得到页框号，只需一次访存；未命中才查内存页表。有效访问时间：</p>
+  <div class="formula"><span class="fx-label">TLB 命中率 α、TLB 访问时间 t、内存访问时间 m</span>
+  EAT = α × (t + m) + (1 − α) × (t + 2m)<br>
+  若忽略 t：EAT = α × m + (1 − α) × 2m = (2 − α) × m</div>
+  <p>进程切换时要处理 TLB：全部刷新（简单但开销大）或给 TLB 项加 <b>ASID</b>（地址空间标识）区分不同进程（现代 CPU 常用）。</p>
+
+  <h3 class="sub">3.3.4 多级页表</h3>
+  <p>单级页表要求<b>连续</b>存放，32 位地址、4KB 页、4B 页表项就要 4MB 连续内存，且很多进程根本用不到全部地址空间。多级页表把页号再分级，顶级页表项指向二级页表；未使用的区域不必分配二级页表，节省内存。</p>
+  <div class="callout exam"><div class="co-title">📌 例题：32 位地址、4KB 页、4B 页表项</div>
+  页内偏移 12 位，页号 20 位。每页可放 4KB / 4B = 1024 个页表项（10 位）。把 20 位页号拆成 <b>10 位 + 10 位</b>，就是两级页表：一级页表 1024 项，每个二级页表 1024 项。<br>
+  若采用 48 位地址、4KB 页、8B 页表项：偏移 12 位，页号 36 位，每页 512 项（9 位），通常拆成 9+9+9+9 四级页表。</div>
+
+  <h2 class="sec" id="s4">3.4 分段与段页式</h2>
+  <h3 class="sub">3.4.1 分段：按逻辑意义切</h3>
+  <p>分段按程序的<b>逻辑单位</b>划分：代码段、数据段、栈段、堆段……每段长度不同，逻辑地址是二维的 <b>(段号, 段内偏移)</b>。段表项包含：段号、段长、段基址、保护位。地址变换时先检查 <b>段内偏移 &lt; 段长</b>，再加上段基址。</p>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>对比</th><th>分页</th><th>分段</th></tr>
+      <tr><td>划分依据</td><td>物理等长切分，对用户透明</td><td>逻辑意义划分，用户可见</td></tr>
+      <tr><td>地址维度</td><td>一维（一个逻辑地址）</td><td>二维（段号 + 段内偏移）</td></tr>
+      <tr><td>大小</td><td>固定（页大小）</td><td>可变（段长度）</td></tr>
+      <tr><td>碎片</td><td>内部碎片（最后一页）</td><td>外部碎片（段间空洞）</td></tr>
+      <tr><td>共享与保护</td><td>按页共享，粒度小，权限控制麻烦</td><td>按逻辑段共享，天然适合代码/数据共享</td></tr>
+      <tr><td>访存次数</td><td>2 次（无 TLB）</td><td>2 次（无 TLB）</td></tr>
+    </table>
+  </div>
+
+  <h3 class="sub">3.4.2 段页式：先分段，再分页</h3>
+  <p>先把进程按逻辑分段，再把每段按页大小分页。地址结构：<b>段号 S + 段内页号 P + 页内偏移 W</b>。每个进程一张段表，每个段一张页表；段表项指向该段的页表基址。无 TLB 时，一次访存需要<b>三次</b>访问内存：查段表 → 查页表 → 访问数据。</p>
+
+  <h2 class="sec" id="s5">3.5 虚拟内存：把外存当内存的「延期交付」</h2>
+  <div class="callout life"><div class="co-title">🧊 生活类比</div>
+  你的书桌（内存）放不下所有书，但你可以只在桌上放正在看的几本，其余放书架（外存）。需要哪本再去拿，看完的收回去。你仍然以为自己拥有「整个图书馆」——这就是<b>虚拟内存</b>。它能成立的前提是<b>局部性原理</b>：程序在一段时间内只集中访问一小部分代码和数据。</div>
+
+  <h3 class="sub">3.5.1 局部性原理与虚拟地址空间</h3>
+  <p><b>时间局部性：</b>刚被访问的指令/数据很可能再次被访问（循环、计数器）。<b>空间局部性：</b>刚被访问的地址附近的地址很可能被访问（数组、顺序执行）。虚拟内存的最大容量由 CPU 地址位数决定（如 32 位 = 4GB）；实际能容纳的容量 = min(2^地址位数, 内存 + 外存)。</p>
+
+  <h3 class="sub">3.5.2 请求分页：页表项多了几个位</h3>
+  <p>请求分页在基本分页的基础上增加：<b>状态位（存在位）</b>表示页是否在内存；<b>访问位</b>供置换算法参考；<b>修改位（脏位）</b>表示页是否被写过，换出时决定要不要写回外存；<b>外存地址</b>指向页在磁盘上的位置。</p>
+  <p><b>缺页中断处理：</b>① 检查地址是否合法；② 内存有空闲页框则分配，否则选牺牲页；③ 若牺牲页被修改过，写回外存；④ 从外存调入缺页；⑤ 更新页表与 TLB；⑥ 恢复现场，<b>重新执行</b>引发缺页的指令。</p>
+
+  <h3 class="sub">3.5.3 页面分配与调入策略</h3>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>策略</th><th>做法</th><th>特点</th></tr>
+      <tr><td>固定分配局部置换</td><td>每个进程分配固定页框数，缺页只在自己页框里换</td><td>实现简单；页框数难定，太少会抖动，太多浪费</td></tr>
+      <tr><td>可变分配全局置换</td><td>进程页框数可变，缺页时可从系统空闲队列或其他进程夺取</td><td>灵活，但可能影响其他进程，导致全局抖动</td></tr>
+      <tr><td>可变分配局部置换</td><td>页框数可变，但缺页只在自己的页框里换；根据缺页率调整页框数</td><td>兼顾灵活与隔离，较常用</td></tr>
+    </table>
+  </div>
+  <p><b>调入策略：</b>请求调页（用到才调，开销小但缺页多）与预调页（预测将要用的页，适合顺序访问，可能浪费）。</p>
+
+  <h2 class="sec" id="s6">3.6 页面置换算法：内存满了换谁</h2>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>算法</th><th>规则</th><th>优点</th><th>缺点 / 考点</th></tr>
+      <tr><td><b>OPT</b> 最佳置换</td><td>淘汰未来最长时间不再使用的页</td><td>缺页率最低（理论下界）</td><td>需要预知未来，无法实现，只作比较基准</td></tr>
+      <tr><td><b>FIFO</b> 先进先出</td><td>淘汰最早调入的页</td><td>简单，实现容易</td><td>可能产生 <b>Belady 异常</b>：页框增多反而缺页更多</td></tr>
+      <tr><td><b>LRU</b> 最近最久未使用</td><td>淘汰最长时间没被访问的页</td><td>性能接近 OPT，符合局部性</td><td>需要硬件记录访问顺序（栈/计数器），开销大</td></tr>
+      <tr><td><b>CLOCK</b> 时钟 / NRU</td><td>环形扫描，访问位为 1 则清零并跳过，为 0 则淘汰</td><td>实现简单，开销小，近似 LRU</td><td>精度不如 LRU；访问位可能被频繁置 1</td></tr>
+      <tr><td><b>改进 CLOCK</b></td><td>同时看访问位和修改位，优先淘汰「未访问且未修改」的页</td><td>减少写回磁盘的次数</td><td>扫描轮数最多 4 轮，判断顺序要记</td></tr>
+    </table>
+  </div>
+
+  <div class="callout exam"><div class="co-title">📌 Belady 异常（真题爱考）</div>
+  引用串 1,2,3,4,1,2,5,1,2,3,4,5。FIFO 在 <b>3 个页框</b>时缺页 <b>9</b> 次，在 <b>4 个页框</b>时缺页 <b>10</b> 次——页框变多，缺页反而增加。LRU 和 OPT 不会出现 Belady 异常（它们属于「栈式算法」）。</div>
+
+  <div class="callout"><div class="co-title">🧮 手算示例：3 个页框，引用串 1,2,3,4,1,2,5,1,2,3,4,5</div>
+  <b>FIFO：</b>①1 缺 ②2 缺 ③3 缺 ④4 缺（换 1）⑤1 缺（换 2）⑥2 缺（换 3）⑦5 缺（换 4）⑧1 命中 ⑨2 命中 ⑩3 缺（换 5）⑪4 缺（换 1）⑫5 缺（换 2）→ <b>9 次缺页，缺页率 75%</b>。<br>
+  <b>OPT：</b>第 4 次换未来最晚用的 3，第 7 次换 4，第 10 次换 1，第 11 次换 3，共 <b>7 次缺页，缺页率 58.3%</b>。LRU 介于两者之间（本例 10 次）。<br>
+  注：不同引用串结果不同，考试一定按题目给的串逐列推，不要背数字。</div>
+
+  <h2 class="sec" id="s7">3.7 抖动与工作集</h2>
+  <p><b>抖动（颠簸，thrashing）</b>：进程频繁缺页，大部分时间用于换入换出，CPU 利用率骤降。根因是分配给进程的页框数少于它当前真正需要的页面集合。OS 可能误判「CPU 空闲」而增加多道度，反而让抖动更严重。</p>
+  <p><b>工作集（working set）</b>：在时间窗口 Δ 内进程实际访问的页面集合，大小记为 WSS。若分配给进程的页框数 &lt; WSS，就会频繁缺页；OS 可据此调整页框数或挂起进程。工作集模型用来防止抖动，但也增加管理开销。</p>
+  <div class="callout warn"><div class="co-title">⚠️ 抖动 vs 缺页</div>
+  缺页是正常现象，虚拟内存本来就会缺页；只有当缺页率过高、系统把大量时间花在换页上，才叫抖动。别把「缺页」直接等同于「抖动」。</div>
+
+  <h2 class="sec" id="deep">🚀 进阶深挖（教材级）</h2>
+  <h3 class="sub">深挖 1 · 多级页表到底省了什么</h3>
+  <p>单级页表要连续 4MB；两级页表把顶级页表（4KB）常驻，二级页表按需分配。若进程只用了地址空间两端各 4MB，只需 2 个二级页表 + 1 个顶级页表 ≈ 12KB，而不是 4MB。代价是访存次数增加（无 TLB 时两级页表要 3 次访存），所以需要 TLB。多级页表还支持稀疏地址空间与按需增长。</p>
+
+  <h3 class="sub">深挖 2 · 有效访问时间（EAT）的完整版</h3>
+  <div class="formula"><span class="fx-label">含 TLB 与缺页</span>
+  EAT = (1 − p) × [α(t + m) + (1 − α)(t + 2m)] + p × F<br>
+  p = 缺页率，F = 缺页处理时间（含换出/调入），α = TLB 命中率，t = TLB 访问时间，m = 内存访问时间</div>
+  <p>很多题简化成「TLB 命中一次访存、未命中两次访存」，或缺页时直接给服务时间。做题先看题目给了哪些量，再套对应公式，不要混用。</p>
+
+  <h3 class="sub">深挖 3 · 写时复制（COW）与内存映射文件</h3>
+  <p><b>COW：</b>fork 后父子进程共享同一份物理页，页表都标记只读；任一方写入时触发保护异常，内核复制该页后再改为可写。这样 fork 不用立刻复制整个地址空间，创建进程更快。<b>mmap：</b>把文件映射到进程地址空间，读写内存即读写文件，由页错误按需调入，省去一次用户态/内核态的数据拷贝。</p>
+
+  <h3 class="sub">深挖 4 · 反置页表</h3>
+  <p>普通页表是「每个进程一张、按虚拟页号索引」，进程多时页表占内存大。反置页表是「全系统一张、按物理页框索引」，每项记录该页框属于哪个进程的哪个虚拟页。优点是页表大小只与物理内存有关；缺点是按虚拟地址查找需要搜索或哈希，命中慢。</p>
+
+  <div class="callout views"><div class="co-title">🌐 多源视角（不同教材的讲法）</div>
+  <ul>
+    <li><b>【汤小丹】分页是「地址变换机构」问题：</b>强调页表寄存器 + 页表 + 物理地址拼接，把两次访存讲成一条硬件流水线。本站的地址转换实验室按这条线设计。</li>
+    <li><b>【王道】页面置换用表格逐列推：</b>每列写当前页框内容，标「命中/缺页」，比在脑子里记更稳。考试时间紧，表格法最不容易错。</li>
+    <li><b>【OSTEP】虚拟内存是「地址空间的抽象」：</b>每个进程以为自己独占内存，OS + MMU 负责翻译与保护；TLB 是地址翻译的缓存，和多级页表配合。与 408 的「页表 + 快表」完全对应。</li>
+  </ul>
+  <div class="src">参考：汤小丹《计算机操作系统（第四版）》第 4 章；王道《操作系统考研复习指导》第 3 章；OSTEP 第 18~23 章</div></div>
+
+  <h2 class="sec" id="lesson">🎬 动画课堂 · 第 3 集《内存的障眼法》</h2>
+  <p>从地址空间到多级页表、TLB、缺页、置换、抖动，一条线看完虚拟内存。</p>
+  <div id="lesson-box"></div>
+
+  <h2 class="sec" id="lab1">🔬 实验室 1：地址转换计算器</h2>
+  <div class="lab" id="lab-addr">
+    <div class="lab-title">输入逻辑地址，看它怎么变成物理地址 <span class="chip">页号 + 偏移</span></div>
+    <div class="lab-desc">默认页表：页 0~7 分别映射到页框 5、8、3、9、2、7、1、6。改页大小或地址，观察拆分结果。</div>
+    <div class="lab-stage">
+      <div class="grid cols-3" style="margin-bottom:12px">
+        <div class="card" style="padding:12px 14px"><span class="muted small">逻辑地址</span><div id="addr-in" class="ls-t mono" style="font-size:18px">0x1A2F</div></div>
+        <div class="card" style="padding:12px 14px"><span class="muted small">页号 P / 页内偏移 W</span><div id="addr-pw" class="ls-t mono" style="font-size:18px">1 / 2607</div></div>
+        <div class="card" style="padding:12px 14px"><span class="muted small">物理地址</span><div id="addr-out" class="ls-t mono" style="font-size:18px;color:var(--brand)">0x8A2F</div></div>
+      </div>
+      <div id="addr-steps" class="steps plain" style="margin:0"></div>
+    </div>
+    <div class="lab-ctrl">
+      <label>页大小：
+        <select id="addr-ps">
+          <option value="1024">1 KB</option>
+          <option value="4096" selected>4 KB</option>
+          <option value="8192">8 KB</option>
+        </select>
+      </label>
+      <label>逻辑地址：<input id="addr-val" class="wide" value="0x1A2F"></label>
+      <button id="addr-run">转换</button>
+      <button id="addr-reset" class="ghost">恢复默认</button>
+    </div>
+    <div class="lab-note" id="addr-note"></div>
+  </div>
+
+  <h2 class="sec" id="lab2">🔬 实验室 2：页面置换模拟器</h2>
+  <div class="lab" id="lab-pr">
+    <div class="lab-title">换谁？逐列看缺页 <span class="chip">FIFO / LRU / OPT / CLOCK</span></div>
+    <div class="lab-desc">修改引用串、页框数和算法，表格会逐列标出命中/缺页；用「上一步/下一步」逐列复盘。</div>
+    <div class="lab-stage">
+      <div class="ref-strip" id="pr-refs"></div>
+      <div id="pr-table"></div>
+      <div class="head-stats" id="pr-stats"></div>
+    </div>
+    <div class="lab-ctrl">
+      <label>引用串：<input id="pr-input" class="wide" value="1,2,3,4,1,2,5,1,2,3,4,5"></label>
+      <label>页框数：<input id="pr-frames" type="number" min="1" max="6" value="3"></label>
+      <label>算法：
+        <select id="pr-alg">
+          <option value="FIFO">FIFO</option>
+          <option value="LRU">LRU</option>
+          <option value="OPT">OPT</option>
+          <option value="CLOCK">CLOCK</option>
+        </select>
+      </label>
+      <button id="pr-run">重新模拟</button>
+      <button id="pr-prev" class="ghost">上一步</button>
+      <button id="pr-next" class="ghost">下一步</button>
+      <button id="pr-reset" class="ghost">恢复默认</button>
+    </div>
+    <div class="lab-note" id="pr-note"></div>
+  </div>
+
+  <h2 class="sec" id="pit">⚠️ 本章避坑清单</h2>
+  <div class="steps plain">
+    <div class="step">逻辑地址是程序看到的，物理地址是内存真实的；MMU 负责转换。</div>
+    <div class="step">分页产生内部碎片，分段/动态分区产生外部碎片；固定分区是内部碎片。</div>
+    <div class="step">页表项数 = 2^页号位数，不是 2^地址位数；页表大小 = 项数 × 项大小。</div>
+    <div class="step">无 TLB 时，分页/分段两次访存，段页式三次访存。</div>
+    <div class="step">TLB 命中率提高会降低 EAT，但 TLB 刷新（进程切换）会降低命中率。</div>
+    <div class="step">FIFO 可能 Belady 异常；LRU/OPT 不会。</div>
+    <div class="step">缺页中断处理完要重新执行原指令，不是下一条。</div>
+    <div class="step">虚拟内存最大容量由地址位数决定，实际容量受内存+外存限制。</div>
+    <div class="step">抖动不是「有缺页」，而是缺页率过高导致系统忙于换页。</div>
+  </div>
+
+  <h2 class="sec" id="quiz">📝 章内练习（16 题 · 基础 → 提高 → 真题改编）</h2>
+
+  <h3 class="sub" style="color:var(--green)">🟢 第一档 · 基础（4 题）</h3>
+
+  <div class="quiz" data-answer="B" data-diff="basic">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl basic">基础</span>练习 1 · 考点：逻辑地址与物理地址</div>
+    下列关于逻辑地址与物理地址的叙述，正确的是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 逻辑地址是内存单元的真实地址</div>
+      <div class="opt" data-opt="B">B. 逻辑地址是程序看到的地址，由 MMU/地址变换机构转换成物理地址</div>
+      <div class="opt" data-opt="C">C. 物理地址空间一定大于逻辑地址空间</div>
+      <div class="opt" data-opt="D">D. 动态重定位不需要硬件支持</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 B。逻辑地址（相对地址）是程序视角，物理地址是内存真实地址，二者由 MMU/重定位机构转换。C 不一定：虚拟地址空间可以大于物理内存（虚拟内存）。D 错，动态重定位必须靠硬件在运行时转换。</div>
+  </div>
+
+  <div class="quiz" data-answer="C" data-diff="basic">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl basic">基础</span>练习 2 · 考点：碎片类型</div>
+    下列存储管理方式中，会产生<b>外部碎片</b>的是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 固定分区分配</div>
+      <div class="opt" data-opt="B">B. 分页存储管理</div>
+      <div class="opt" data-opt="C">C. 动态分区分配</div>
+      <div class="opt" data-opt="D">D. 单一连续分配</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 C。动态分区按需切分，反复分配/回收后留下分散的小空闲区，属于外部碎片。固定分区和单一连续产生内部碎片；分页只在最后一页产生内部碎片，不产生外部碎片。分段也会产生外部碎片。</div>
+  </div>
+
+  <div class="quiz" data-answer="B" data-diff="basic">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl basic">基础</span>练习 3 · 考点：页表项数</div>
+    某系统逻辑地址 32 位，页大小 4KB，页表项大小 4B。单级页表的页表项数和页表大小分别是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 2¹² 项，16KB</div>
+      <div class="opt" data-opt="B">B. 2²⁰ 项，4MB</div>
+      <div class="opt" data-opt="C">C. 2²⁰ 项，1MB</div>
+      <div class="opt" data-opt="D">D. 2³² 项，16GB</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 B。4KB = 2¹²，页内偏移 12 位，页号 32−12 = 20 位，所以页表项数 = 2²⁰ = 1M。每项 4B，页表大小 = 2²⁰ × 4B = 4MB。注意页表项数看「页号位数」，不是地址总位数。</div>
+  </div>
+
+  <div class="quiz" data-answer="D" data-diff="basic">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl basic">基础</span>练习 4 · 考点：分页地址计算</div>
+    页大小 1KB，逻辑地址 0x1A2F 的页号和页内偏移分别是（十进制）：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 26 和 47</div>
+      <div class="opt" data-opt="B">B. 1 和 0xA2F</div>
+      <div class="opt" data-opt="C">C. 7 和 559</div>
+      <div class="opt" data-opt="D">D. 6 和 559</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 D。0x1A2F = 6703；1KB = 1024，6703 ÷ 1024 = 6 余 559，所以 P=6，W=559（即 0x22F）。A 两个数都不对；B 的页号算成了 1，且给的是十六进制偏移；C 的页号算成了 7。物理地址 = 页框号 × 1024 + 559，若页表 6→8，则物理地址 = 8192 + 559 = 8751 = 0x222F。</div>
+  </div>
+
+  <h3 class="sub" style="color:var(--accent)">🟡 第二档 · 提高（4 题）</h3>
+
+  <div class="quiz" data-answer="A" data-diff="mid">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl mid">提高</span>练习 5 · 考点：TLB 有效访问时间</div>
+    忽略 TLB 访问时间，内存访问时间 100ns，TLB 命中率 90%。平均有效访问时间约为：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 110ns</div>
+      <div class="opt" data-opt="B">B. 120ns</div>
+      <div class="opt" data-opt="C">C. 190ns</div>
+      <div class="opt" data-opt="D">D. 200ns</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 A。命中时只需 1 次访存 100ns；未命中要查页表 + 访问数据 = 200ns。EAT = 0.9×100 + 0.1×200 = 110ns。公式：EAT = (2−α)×m = 1.1×100 = 110ns。若题目给 TLB 访问时间 t，则再加 t。</div>
+  </div>
+
+  <div class="quiz" data-answer="C" data-diff="mid">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl mid">提高</span>练习 6 · 考点：多级页表</div>
+    采用多级页表的主要目的是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 减少每次地址转换的访存次数</div>
+      <div class="opt" data-opt="B">B. 消除内部碎片</div>
+      <div class="opt" data-opt="C">C. 避免为未使用的地址空间分配连续的大页表，节省页表占用的内存</div>
+      <div class="opt" data-opt="D">D. 让页表可以放在磁盘上，不需要内存</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 C。单级页表要求连续存放且覆盖整个地址空间；多级页表按需分配二级页表，未使用的区域不占内存。代价是地址转换访存次数增加（需要 TLB 缓解），所以 A 错；B、D 与多级页表无关。</div>
+  </div>
+
+  <div class="quiz" data-answer="B" data-diff="mid">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl mid">提高</span>练习 7 · 考点：分页 vs 分段</div>
+    下列关于分页与分段的比较，正确的是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 分页对用户可见，分段对用户透明</div>
+      <div class="opt" data-opt="B">B. 分页是一维地址空间，分段是二维地址空间</div>
+      <div class="opt" data-opt="C">C. 分页会产生外部碎片，分段会产生内部碎片</div>
+      <div class="opt" data-opt="D">D. 分段必须要求每段大小相同</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 B。分页由系统按固定大小切分，用户只给一个逻辑地址（一维）；分段按逻辑单位划分，地址是（段号，段内偏移）二维。A 说反了；C 说反了（分页内部碎片、分段外部碎片）；D 错，段长可变。</div>
+  </div>
+
+  <div class="quiz" data-answer="D" data-diff="mid">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl mid">提高</span>练习 8 · 考点：段页式访存</div>
+    在段页式存储管理中，若没有 TLB，访问一个数据需要访问内存的次数是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 1 次</div>
+      <div class="opt" data-opt="B">B. 2 次</div>
+      <div class="opt" data-opt="C">C. 3 次</div>
+      <div class="opt" data-opt="D">D. 4 次</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 C。先查段表得到该段页表基址（1 次），再查页表得到页框号（1 次），最后访问目标数据（1 次），共 3 次。分页/分段无 TLB 是 2 次；段页式多一级段表，所以 3 次。TLB 命中可减少到 1 次。</div>
+  </div>
+
+  <h3 class="sub" style="color:var(--brand)">🔴 第三档 · 真题改编（8 题 · 题型对标）</h3>
+
+  <div class="quiz" data-answer="C" data-diff="real" data-year="2011">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2011 题型</span>练习 9 · 考点：虚拟内存容量</div>
+    某计算机地址总线 32 位，内存 1GB，外存 100GB。虚拟内存的最大容量是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 1GB</div>
+      <div class="opt" data-opt="B">B. 100GB</div>
+      <div class="opt" data-opt="C">C. 4GB</div>
+      <div class="opt" data-opt="D">D. 101GB</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 C。虚拟地址空间由 CPU 地址位数决定：32 位 → 2³² = 4GB。实际能容纳的容量 = min(4GB, 内存+外存)，但「最大容量」问的是地址空间上限，所以是 4GB。若地址位数足够大，才受内存+外存限制。</div>
+  </div>
+
+  <div class="quiz" data-answer="A" data-diff="real" data-year="2014">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2014 题型</span>练习 10 · 考点：缺页处理</div>
+    进程访问的页面不在内存，触发缺页异常。操作系统完成调页后，应：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 重新执行引发缺页的指令</div>
+      <div class="opt" data-opt="B">B. 从下一条指令继续执行</div>
+      <div class="opt" data-opt="C">C. 终止该进程</div>
+      <div class="opt" data-opt="D">D. 直接切换到其他进程，永不返回</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 A。缺页是故障（fault），处理完页面已调入、页表已更新，必须重新执行原指令才能完成这次访问。B 是系统调用/自陷的返回方式；C 只适用于无法恢复的异常；D 描述错误。</div>
+  </div>
+
+  <div class="quiz" data-answer="B" data-diff="real" data-year="2016">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2016 题型</span>练习 11 · 考点：Belady 异常</div>
+    下列页面置换算法中，可能出现 Belady 异常的是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. LRU</div>
+      <div class="opt" data-opt="B">B. FIFO</div>
+      <div class="opt" data-opt="C">C. OPT</div>
+      <div class="opt" data-opt="D">D. 改进 CLOCK</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 B。FIFO 不满足「栈式算法」性质，增加页框可能改变淘汰顺序，导致缺页反而增多。LRU 和 OPT 属于栈式算法，不会出现 Belady 异常。改进 CLOCK 是 LRU 的近似，通常也不会出现该异常。</div>
+  </div>
+
+  <div class="quiz" data-answer="A" data-diff="real" data-year="2018">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2018 题型</span>练习 12 · 考点：OPT 缺页次数</div>
+    3 个页框，引用串 1,2,3,4,1,2,5,1,2,3,4,5，采用 OPT 算法，缺页次数是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 7</div>
+      <div class="opt" data-opt="B">B. 9</div>
+      <div class="opt" data-opt="C">C. 10</div>
+      <div class="opt" data-opt="D">D. 12</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 A。前 3 次 1、2、3 都缺；第 4 次 4 缺，未来 3 最晚用（第 10 位），换 3；5 缺时未来 4 最晚用（第 11 位），换 4；3 缺时未来 1、2 都不再用，换 1；4 缺时换 3。共 7 次缺页，缺页率 58.3%。可用本页实验室逐列验证。</div>
+  </div>
+
+  <div class="quiz" data-answer="D" data-diff="real" data-year="2020">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2020 题型</span>练习 13 · 考点：改进 CLOCK</div>
+    改进型 CLOCK 置换算法选择淘汰页时，优先级最高的候选是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 访问位=1，修改位=1</div>
+      <div class="opt" data-opt="B">B. 访问位=1，修改位=0</div>
+      <div class="opt" data-opt="C">C. 访问位=0，修改位=1</div>
+      <div class="opt" data-opt="D">D. 访问位=0，修改位=0</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 D。优先淘汰「最近没访问（访问位 0）且没修改（修改位 0）」的页，因为不用写回磁盘，代价最小。顺序大致是 (0,0) → (0,1) → (1,0) → (1,1)，扫描过程中会把访问位清零。</div>
+  </div>
+
+  <div class="quiz" data-answer="B" data-diff="real" data-year="2012">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2012 题型</span>练习 14 · 考点：页面分配策略</div>
+    可变分配局部置换的特点是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 每个进程页框数固定，缺页只在本进程内换</div>
+      <div class="opt" data-opt="B">B. 进程页框数可变，但缺页只在本进程的页框内换，按缺页率调整页框数</div>
+      <div class="opt" data-opt="C">C. 缺页时总是从其他进程夺取页框</div>
+      <div class="opt" data-opt="D">D. 不允许进程缺页</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 B。可变分配局部置换：页框数可根据缺页率动态调整，但置换范围限于本进程，不会随意抢别人的页框。A 是固定分配局部置换；C 是可变分配全局置换；D 违背虚拟内存的基本思想。</div>
+  </div>
+
+  <div class="quiz" data-answer="C" data-diff="real" data-year="2019">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2019 题型</span>练习 15 · 考点：抖动</div>
+    系统发生抖动（thrashing）的根本原因是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 磁盘容量太小</div>
+      <div class="opt" data-opt="B">B. 页面大小太大</div>
+      <div class="opt" data-opt="C">C. 分配给进程的页框数少于其工作集，导致频繁缺页</div>
+      <div class="opt" data-opt="D">D. CPU 主频太低</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 C。抖动的本质是「页框不够 → 频繁缺页 → 换入换出占满 I/O → CPU 空闲 → OS 误以为可以再加进程 → 更抖」。解决办法：按工作集分配页框、降低多道度、挂起部分进程。A、B、D 都不是根本原因。</div>
+  </div>
+
+  <div class="quiz" data-answer="D" data-diff="real" data-year="2021">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2021 题型</span>练习 16 · 考点：地址转换综合</div>
+    页大小 1KB，页表映射：页 6 → 页框 8。逻辑地址 0x1A2F 对应的物理地址是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 0x1A2F</div>
+      <div class="opt" data-opt="B">B. 0x2000</div>
+      <div class="opt" data-opt="C">C. 0x212F</div>
+      <div class="opt" data-opt="D">D. 0x222F</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 D。0x1A2F = 6703，页号 6、偏移 559（0x22F）。页框 8 的起始物理地址 = 8×1024 = 8192 = 0x2000，加偏移 0x22F 得 <b>0x222F</b>。A 是逻辑地址原样；B 只取了页框起始；C 把偏移加错。<br><span class="muted small">注：本题页表是「页 6 → 框 8」；本章实验室的默认示例页表是「页 6 → 框 1」，两者不同，按题干给的映射算。</span></div>
+  </div>
+
+  <h2 class="sec" id="ck">✅ 本章打卡清单 <span class="progress-pill">0 / 6 已打卡</span></h2>
+  <div class="checklist" data-ck-scope>
+    <label class="check-item" data-ck="ch03-1"><input type="checkbox"><span>能区分逻辑/物理地址、内部/外部碎片，说清三种装入方式</span></label>
+    <label class="check-item" data-ck="ch03-2"><input type="checkbox"><span>能手算页号、页内偏移、物理地址，并算出页表项数与页表大小</span></label>
+    <label class="check-item" data-ck="ch03-3"><input type="checkbox"><span>能说清分页/分段/段页式的地址结构与访存次数</span></label>
+    <label class="check-item" data-ck="ch03-4"><input type="checkbox"><span>能默写缺页中断处理步骤，解释 TLB 与 EAT 公式</span></label>
+    <label class="check-item" data-ck="ch03-5"><input type="checkbox"><span>能用表格手算 FIFO/LRU/OPT 的缺页次数，解释 Belady 异常</span></label>
+    <label class="check-item" data-ck="ch03-6"><input type="checkbox"><span>完成章内 16 题，错题能说出错因并收藏/重做</span></label>
+  </div>
+
+  <p class="center" style="margin-top:28px"><a class="btn" href="ch04.html">下一章：文件管理 →</a></p>
+</div>
+
+<footer>
+  408 操作系统可视化课堂 · 第 3 章<br>
+  <div class="pagers"><a href="ch02.html">上一章</a><a href="index.html">总览</a><a href="ch04.html">下一章</a></div>
+</footer>
+
+<script src="assets/app.js"></script>
+<script src="assets/lesson-ch03.js"></script>
+<script src="assets/lesson-player.js"></script>
+<script>
+/* 实验室 1：地址转换 */
+(function () {
+  var PAGE_TABLE = [5, 8, 3, 9, 2, 7, 1, 6];
+  var psSel = document.getElementById("addr-ps");
+  var valIn = document.getElementById("addr-val");
+  var stepsEl = document.getElementById("addr-steps");
+  var noteEl = document.getElementById("addr-note");
+  if (!psSel) return;
+  function parseAddr(s) {
+    s = s.trim().toLowerCase();
+    if (s.indexOf("0x") === 0) return parseInt(s.slice(2), 16);
+    return parseInt(s, 10);
+  }
+  function hex(n) { return "0x" + n.toString(16).toUpperCase(); }
+  function run() {
+    var ps = parseInt(psSel.value, 10), addr = parseAddr(valIn.value);
+    if (isNaN(addr) || addr < 0) { noteEl.textContent = "请输入非负的十进制或 0x 开头的十六进制地址。"; return; }
+    var p = Math.floor(addr / ps), w = addr % ps;
+    var frame = PAGE_TABLE[p];
+    var out = frame === undefined ? null : frame * ps + w;
+    document.getElementById("addr-in").textContent = hex(addr) + "（" + addr + "）";
+    document.getElementById("addr-pw").textContent = "P=" + p + " / W=" + w;
+    document.getElementById("addr-out").textContent = out === null ? "缺页 / 越界" : hex(out) + "（" + out + "）";
+    document.getElementById("addr-out").style.color = out === null ? "var(--red)" : "var(--brand)";
+    var bits = Math.log2(ps);
+    stepsEl.innerHTML = "";
+    var lines = [
+      "页大小 " + (ps / 1024) + " KB = 2^" + bits + "，页内偏移占 " + bits + " 位。",
+      "页号 P = ⌊" + addr + " ÷ " + ps + "⌋ = " + p + "；页内偏移 W = " + addr + " mod " + ps + " = " + w + "（" + hex(w) + "）。",
+      frame === undefined ? "页号 " + p + " 超出页表范围（页表只有 " + PAGE_TABLE.length + " 项），触发越界或缺页。" : "查页表：页 " + p + " → 页框 " + frame + "。",
+      out === null ? "无法得到物理地址。" : "物理地址 = " + frame + " × " + ps + " + " + w + " = " + out + "（" + hex(out) + "）。"
+    ];
+    lines.forEach(function (t) {
+      var d = document.createElement("div");
+      d.className = "step";
+      d.textContent = t;
+      stepsEl.appendChild(d);
+    });
+    noteEl.innerHTML = "公式：<b>物理地址 = 页框号 × 页大小 + 页内偏移</b>。本题页号 " + p + (frame === undefined ? " 没有有效映射。" : "，页框 " + frame + "。");
+  }
+  document.getElementById("addr-run").addEventListener("click", run);
+  psSel.addEventListener("change", run);
+  valIn.addEventListener("change", run);
+  document.getElementById("addr-reset").addEventListener("click", function () {
+    psSel.value = "4096"; valIn.value = "0x1A2F"; run();
+  });
+  run();
+})();
+
+/* 实验室 2：页面置换 */
+(function () {
+  var refs = [], framesN = 3, alg = "FIFO", trace = [], cur = 0;
+  var refBox = document.getElementById("pr-refs");
+  var tableBox = document.getElementById("pr-table");
+  var statsBox = document.getElementById("pr-stats");
+  var noteEl = document.getElementById("pr-note");
+  if (!refBox) return;
+
+  function parseRefs(s) {
+    return s.split(/[,\s，]+/).map(function (x) { return parseInt(x, 10); }).filter(function (x) { return !isNaN(x) && x >= 0; });
+  }
+  function simulate() {
+    var frames = [], queue = [], lastUse = {}, refBits = {}, pointer = 0, faults = 0;
+    trace = [];
+    for (var i = 0; i < refs.length; i++) {
+      var page = refs[i], hit = frames.indexOf(page) >= 0, evict = null;
+      if (hit) {
+        if (alg === "LRU") lastUse[page] = i;
+        if (alg === "CLOCK") refBits[page] = 1;
+      } else {
+        faults++;
+        if (frames.length < framesN) {
+          frames.push(page); queue.push(page);
+          if (alg === "CLOCK") refBits[page] = 1;
+        } else {
+          var idx = 0;
+          if (alg === "FIFO") {
+            evict = queue.shift();
+            idx = frames.indexOf(evict);
+            frames[idx] = page; queue.push(page);
+          } else if (alg === "LRU") {
+            var min = Infinity;
+            frames.forEach(function (p, k) { var u = lastUse[p] === undefined ? -1 : lastUse[p]; if (u < min) { min = u; idx = k; } });
+            evict = frames[idx]; frames[idx] = page;
+          } else if (alg === "OPT") {
+            var farthest = -1;
+            frames.forEach(function (p, k) {
+              var next = refs.indexOf(p, i + 1);
+              if (next === -1) next = Infinity;
+              if (next > farthest) { farthest = next; idx = k; }
+            });
+            evict = frames[idx]; frames[idx] = page;
+          } else {
+            for (var guard = 0; guard < framesN * 4; guard++) {
+              if (refBits[frames[pointer]] === 0) { idx = pointer; break; }
+              refBits[frames[pointer]] = 0;
+              pointer = (pointer + 1) % framesN;
+            }
+            evict = frames[idx]; frames[idx] = page;
+            pointer = (idx + 1) % framesN;
+            refBits[page] = 1;
+          }
+        }
+        if (alg === "LRU") lastUse[page] = i;
+        if (alg === "CLOCK") refBits[page] = 1;
+      }
+      trace.push({ page: page, hit: hit, frames: frames.slice(), evict: evict });
+    }
+    return faults;
+  }
+  function render() {
+    refBox.innerHTML = refs.map(function (p, i) {
+      return '<div class="ref-cell ' + (i === cur ? "now" : (i < cur ? "done" : "")) + '">' + p + "</div>";
+    }).join("");
+    var head = '<div class="tbl-wrap"><table class="tbl" style="min-width:' + Math.max(560, refs.length * 52) + 'px"><tr><th>访问</th>';
+    refs.forEach(function (p, i) { head += "<th" + (i === cur ? ' style="background:var(--brand);color:#fff"' : "") + ">" + p + "</th>"; });
+    head += "</tr>";
+    for (var f = 0; f < framesN; f++) {
+      head += "<tr><td><b>页框 " + (f + 1) + "</b></td>";
+      trace.forEach(function (s, i) {
+        var v = s.frames[f];
+        var cls = i === cur ? ' style="outline:2px solid var(--brand)"' : "";
+        var color = s.hit ? "color:var(--green)" : "color:var(--red);font-weight:700";
+        head += "<td" + cls + " class=\"num\"><span style=\"" + color + "\">" + (v === undefined ? "—" : v) + "</span></td>";
+      });
+      head += "</tr>";
+    }
+    head += "<tr><td><b>结果</b></td>";
+    trace.forEach(function (s, i) {
+      head += "<td" + (i === cur ? ' style="outline:2px solid var(--brand)"' : "") + ">" + (s.hit ? '<span style="color:var(--green)">命中</span>' : '<span style="color:var(--red)">缺页</span>') + "</td>";
+    });
+    head += "</tr></table></div>";
+    tableBox.innerHTML = head;
+    var faults = trace.filter(function (s) { return !s.hit; }).length;
+    var rate = refs.length ? (faults / refs.length * 100).toFixed(1) : "0.0";
+    statsBox.innerHTML = "<span>缺页次数 <b>" + faults + "</b> / " + refs.length + "</span><span>缺页率 <b>" + rate + "%</b></span><span>命中率 <b>" + (100 - parseFloat(rate)).toFixed(1) + "%</b></span>";
+    var s = trace[cur];
+    noteEl.innerHTML = "第 " + (cur + 1) + " 次访问页 <b>" + s.page + "</b>：" + (s.hit ? "命中" : "缺页" + (s.evict !== null && s.evict !== undefined ? "，淘汰页 " + s.evict : "，页框未满直接放入")) + "。当前算法 <b>" + alg + "</b>，页框 " + framesN + " 个。";
+    document.getElementById("pr-prev").disabled = cur <= 0;
+    document.getElementById("pr-next").disabled = cur >= trace.length - 1;
+    document.getElementById("pr-prev").style.opacity = cur <= 0 ? ".45" : "1";
+    document.getElementById("pr-next").style.opacity = cur >= trace.length - 1 ? ".45" : "1";
+  }
+  function reboot() {
+    refs = parseRefs(document.getElementById("pr-input").value);
+    framesN = Math.max(1, Math.min(6, parseInt(document.getElementById("pr-frames").value, 10) || 3));
+    alg = document.getElementById("pr-alg").value;
+    if (!refs.length) { refs = [1, 2, 3, 4, 1, 2, 5, 1, 2, 3, 4, 5]; }
+    simulate(); cur = trace.length - 1; render();
+  }
+  document.getElementById("pr-run").addEventListener("click", reboot);
+  document.getElementById("pr-prev").addEventListener("click", function () { if (cur > 0) { cur--; render(); } });
+  document.getElementById("pr-next").addEventListener("click", function () { if (cur < trace.length - 1) { cur++; render(); } });
+  document.getElementById("pr-reset").addEventListener("click", function () {
+    document.getElementById("pr-input").value = "1,2,3,4,1,2,5,1,2,3,4,5";
+    document.getElementById("pr-frames").value = 3;
+    document.getElementById("pr-alg").value = "FIFO";
+    reboot(); cur = 0; render();
+  });
+  reboot(); cur = 0; render();
+})();
+</script>
+</body>
+</html>

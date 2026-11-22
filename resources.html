@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>资源导航 · 408 操作系统可视化课堂</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<nav class="topbar"><div class="topbar-inner">
+  <a class="logo" href="index.html"><span class="dot"></span>408 操作系统可视化课堂</a>
+  <div class="nav-links">
+    <a href="index.html">总览</a><a href="ch01.html">系统概述</a><a href="ch02.html">进程与线程</a><a href="ch03.html">内存管理</a><a href="ch04.html">文件管理</a><a href="ch05.html">I/O 管理</a><a href="practice.html">练习场</a><a href="method.html">备考方法论</a><a href="resources.html">资源导航</a>
+  </div>
+  <button class="theme-btn" title="切换明暗主题">🌙</button>
+</div></nav>
+
+<div class="wrap">
+  <div class="hero">
+    <h1>资源导航 · 别再收藏一堆不看的课</h1>
+    <p>这一页只保留真正对 408 操作系统有用的资料，并写清「什么时候用、怎么用、不要怎么用」。资源在精不在多：一本教材 + 一本王道 + 一套真题 + 一个可视化站，足够。</p>
+    <p class="tagline">教材 · 网课 · 真题 · 动手实验 · 使用顺序</p>
+  </div>
+
+  <div class="callout exam"><div class="co-title">📌 先给结论</div>
+  <b>考研主线：</b>王道《操作系统考研复习指导》打底 + 汤小丹《计算机操作系统》补原理 + 历年真题。本站负责「看不懂时的可视化解释」和「计算题手感」。<br>
+  <b>时间不够：</b>只做王道 + 真题 + 本站练习场，不要开新书。<br>
+  <b>想深入理解：</b>OSTEP 选读进程/内存/文件三部分，配合 xv6 或 MIT 6.S081 的实验；但这是加分项，不是考前主线。</div>
+
+  <h2 class="sec">一、教材与教辅</h2>
+  <div class="card">
+    <div class="res-item">
+      <div class="res-icon">📘</div>
+      <div class="res-body">
+        <h4>王道《操作系统考研复习指导》 <span class="res-meta"><span class="star">★★★★★</span> 考研主线</span></h4>
+        <p>最贴 408 考纲的教辅：知识点按考点组织，课后选择题质量高，大题有模板。每年新版会补真题。</p>
+        <p class="res-meta">用法：第一轮按章读 + 做选择题；第二轮只看错题和每章「考点总结」；不要逐字背，重点看它怎么把概念转成考法。</p>
+      </div>
+    </div>
+    <div class="res-item">
+      <div class="res-icon">📗</div>
+      <div class="res-body">
+        <h4>汤小丹《计算机操作系统》（第四版/第五版） <span class="res-meta"><span class="star">★★★★☆</span> 补原理</span></h4>
+        <p>国内经典教材，概念完整、体系严谨。适合在王道某段看不懂时回查原理，尤其是进程同步、虚拟内存、文件系统。</p>
+        <p class="res-meta">用法：当字典查，不要从头到尾啃；重点读第 2、3、4、5、6 章。版本以你手里那本为准，目录略有差异。</p>
+      </div>
+    </div>
+    <div class="res-item">
+      <div class="res-icon">📙</div>
+      <div class="res-body">
+        <h4>《操作系统概念》（Silberschatz / 恐龙书） <span class="res-meta"><span class="star">★★★☆☆</span> 选读</span></h4>
+        <p>英文经典，图多、例子多，适合补充「为什么这样设计」。但内容超出 408，不要全读。</p>
+        <p class="res-meta">用法：只看进程、同步、内存、文件系统四部分；当成王道之外的第二种讲法。</p>
+      </div>
+    </div>
+    <div class="res-item">
+      <div class="res-icon">📕</div>
+      <div class="res-body">
+        <h4>OSTEP《Operating Systems: Three Easy Pieces》 <span class="res-meta"><span class="star">★★★★☆</span> 免费英文</span></h4>
+        <p>用「虚拟化、并发、持久化」三条线讲 OS，语言通俗，配套作业。适合想真正理解机制的人。</p>
+        <p class="res-meta">用法：选读第 4~5 章（进程）、第 18~23 章（虚拟内存）、第 39~41 章（文件系统）；不必做全部作业。地址：pages.cs.wisc.edu/~remzi/OSTEP/</p>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="sec">二、网课（按用途选，不要都看）</h2>
+  <div class="card">
+    <div class="res-item">
+      <div class="res-icon">🎥</div>
+      <div class="res-body">
+        <h4>王道操作系统网课 <span class="res-meta"><span class="star">★★★★★</span> 考研向</span></h4>
+        <p>与王道书配套，考点覆盖全，适合第一轮跟学。讲义基本就是书的精简版。</p>
+        <p class="res-meta">用法：1.25~1.5 倍速，只看书上看不懂的章节；看完立刻做题，不要连续刷完一章视频再做题。</p>
+      </div>
+    </div>
+    <div class="res-item">
+      <div class="res-icon">🎥</div>
+      <div class="res-body">
+        <h4>哈工大 李治军《操作系统》 <span class="res-meta"><span class="star">★★★★☆</span> 理解向</span></h4>
+        <p>以 Linux 0.11 为例讲进程、内存、文件、I/O，实验味重，能帮你把「机制怎么落地」串起来。</p>
+        <p class="res-meta">用法：不要当考研主线；在学进程切换、页表、文件系统时挑对应几集看，建立实感。</p>
+      </div>
+    </div>
+    <div class="res-item">
+      <div class="res-icon">🎥</div>
+      <div class="res-body">
+        <h4>南京大学 蒋炎岩《操作系统》 <span class="res-meta"><span class="star">★★★★☆</span> 进阶向</span></h4>
+        <p>从「程序如何在计算机上运行」讲起，强调并发、虚拟化与持久化的本质，适合想深入的人。</p>
+        <p class="res-meta">用法：选看并发与虚拟内存部分；如果考研时间紧，先收藏，考完再系统看。</p>
+      </div>
+    </div>
+    <div class="res-item">
+      <div class="res-icon">🎥</div>
+      <div class="res-body">
+        <h4>MIT 6.S081 / xv6 <span class="res-meta"><span class="star">★★★☆☆</span> 动手向</span></h4>
+        <p>通过一个小型 UNIX 内核 xv6 理解进程、页表、中断、文件系统。实验质量极高，但门槛也高。</p>
+        <p class="res-meta">用法：考后再做；考研期间只看 xv6 的进程/页表章节图解即可。地址：pdos.csail.mit.edu/6.828/</p>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="sec">三、真题与题库</h2>
+  <div class="card">
+    <div class="res-item">
+      <div class="res-icon">📝</div>
+      <div class="res-body">
+        <h4>408 历年真题（2009 至今） <span class="res-meta"><span class="star">★★★★★</span> 必做</span></h4>
+        <p>最好的模拟题。OS 部分约 35 分/套，2009~2025 共十几套，足够刷两遍。</p>
+        <p class="res-meta">用法：第一遍按章做（学完一章做对应题）；第二遍按套限时；第三遍只做错题。不要一开始就成套刷，会浪费真题。</p>
+      </div>
+    </div>
+    <div class="res-item">
+      <div class="res-icon">📝</div>
+      <div class="res-body">
+        <h4>王道课后题 + 模拟卷 <span class="res-meta"><span class="star">★★★★☆</span> 巩固</span></h4>
+        <p>选择题量大，覆盖细；模拟卷用于考前找手感，但难度和风格与真题有差异。</p>
+        <p class="res-meta">用法：课后选择题全做；模拟卷只做 2~3 套，不要用模拟卷分数判断水平。</p>
+      </div>
+    </div>
+    <div class="res-item">
+      <div class="res-icon">🧪</div>
+      <div class="res-body">
+        <h4>本站练习场 <span class="res-meta"><span class="star">★★★★☆</span> 免费</span></h4>
+        <p>把五章 80 题按基础/提高/真题改编/全真模拟组卷，自动错题本、收藏、随机抽题；答题进度与章节页共享。</p>
+        <p class="res-meta">用法：学完一章先做章内 16 题，再来这里做对应难度卷；错题回到章节重读对应小节。</p>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="sec">四、动手实验（选做，考后加分）</h2>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>实验</th><th>能学到什么</th><th>对应 408 章节</th><th>建议</th></tr>
+      <tr><td>Linux 常用命令 + /proc 观察</td><td>进程状态、内存映射、文件描述符</td><td>第 2、3、4 章</td><td>用 <code class="inline">ps</code>、<code class="inline">top</code>、<code class="inline">/proc/&lt;pid&gt;/maps</code> 看真实进程</td></tr>
+      <tr><td>xv6 阅读</td><td>进程切换、页表、中断、文件系统实现</td><td>第 2~5 章</td><td>只看代码结构和关键函数，不要求全懂</td></tr>
+      <tr><td>MIT 6.S081 实验</td><td>系统调用、页表、多线程、文件系统</td><td>第 1~5 章</td><td>考后完整做；考研期间选做 1~2 个</td></tr>
+      <tr><td>写一个简易 shell</td><td>fork/exec/wait、管道、重定向</td><td>第 2 章</td><td>50 行左右，能加深对进程创建与通信的理解</td></tr>
+      <tr><td>写一个页面置换模拟器</td><td>FIFO/LRU/OPT/CLOCK</td><td>第 3 章</td><td>本站实验室已给可视化，可自己用 Python 重写一遍</td></tr>
+    </table>
+  </div>
+
+  <h2 class="sec">五、使用顺序（照着做就行）</h2>
+  <div class="steps">
+    <div class="step"><b>第 1 周：</b>读本站第 1 章 + 王道第 1 章，做基础题。把「用户态/内核态、中断、系统调用」弄清楚。</div>
+    <div class="step"><b>第 2~4 周：</b>第 2 章（进程）主线：本站动画 + 王道 + 王道课后选择；每周做一次本站「基础卷」。</div>
+    <div class="step"><b>第 5~7 周：</b>第 3 章（内存）主线：重点练地址转换、页表、置换；用本站实验室验证手算。</div>
+    <div class="step"><b>第 8~9 周：</b>第 4 章（文件）+ 第 5 章（I/O），以选择题和计算模板为主，不钻实现细节。</div>
+    <div class="step"><b>第 10 周起：</b>真题按章做 → 按套限时 → 错题重做；配合<a href="method.html">备考方法论</a>的三轮节奏。</div>
+  </div>
+
+  <div class="callout warn"><div class="co-title">⚠️ 三个不要</div>
+  ① 不要同时开三本教材、四门网课——重复输入会制造「我很努力」的错觉；<br>
+  ② 不要只看视频不做题——OS 的计算题必须手算，眼睛会不等于手会；<br>
+  ③ 不要用模拟卷分数判断考研水平——真题和错题本才是可靠信号。</div>
+
+  <p class="center" style="margin-top:28px"><a class="btn" href="index.html">回到总览 →</a> <a class="btn ghost" href="method.html">看备考方法论 →</a></p>
+</div>
+
+<footer>
+  408 操作系统可视化课堂 · 资源导航<br>
+  <div class="pagers"><a href="index.html">总览</a><a href="method.html">备考方法论</a><a href="practice.html">练习场</a></div>
+</footer>
+
+<script src="assets/app.js"></script>
+</body>
+</html>

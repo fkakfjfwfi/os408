@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第 5 章 输入/输出管理 · 408 操作系统可视化课堂</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<nav class="topbar"><div class="topbar-inner">
+  <a class="logo" href="index.html"><span class="dot"></span>408 操作系统可视化课堂</a>
+  <div class="nav-links">
+    <a href="index.html">总览</a><a href="ch01.html">系统概述</a><a href="ch02.html">进程与线程</a><a href="ch03.html">内存管理</a><a href="ch04.html">文件管理</a><a href="ch05.html">I/O 管理</a><a href="practice.html">练习场</a><a href="method.html">备考方法论</a><a href="resources.html">资源导航</a>
+  </div>
+  <button class="theme-btn" title="切换明暗主题">🌙</button>
+</div></nav>
+
+<div class="wrap">
+  <div class="hero">
+    <h1>第 5 章 · 输入/输出管理</h1>
+    <p>I/O 是操作系统里「概念最碎」的一章：四种 I/O 方式、四层软件、三种设备分配、缓冲与 SPOOLing，选择题特别爱考辨析。抓住一条主线：<b>CPU 如何用越来越少的时间，指挥越来越快的设备</b>。</p>
+    <p class="tagline">预计学习 4~6 小时 · 动画 1 集 · 实验室 1 个 · 练习 16 题 · 打卡 6 项</p>
+  </div>
+
+  <div class="toc"><span class="toc-label">本页导航</span><a href="#goal">学习目标</a><a href="#s1">设备与控制器</a><a href="#s2">四种 I/O 方式</a><a href="#s3">软件层次</a><a href="#s4">缓冲区</a><a href="#s5">设备分配</a><a href="#s6">SPOOLing</a><a href="#s7">磁盘缓存</a><a href="#deep">进阶深挖</a><a href="#lesson">动画课堂</a><a href="#lab">缓冲计算</a><a href="#pit">避坑清单</a><a href="#quiz">章内练习</a><a href="#ck">打卡</a></div>
+
+  <div class="callout exam" id="goal"><div class="co-title">🎯 学习目标（学完你应该能）</div>
+  ① 区分块设备/字符设备，说清 I/O 控制器里有哪些寄存器；<br>
+  ② 比较程序查询、中断驱动、DMA、通道四种方式的 CPU 干预频率与适用场景；<br>
+  ③ 画出 I/O 软件四层结构，说清设备独立性软件与设备驱动程序的区别；<br>
+  ④ 用单缓冲/双缓冲公式算处理时间，区分缓冲与缓存；<br>
+  ⑤ 说清 SPOOLing 的原理与「虚拟设备」的含义；<br>
+  ⑥ 区分独占/共享/虚拟设备，知道设备分配用到的四张表。</div>
+
+  <h2 class="sec" id="s1">5.1 先说人话：CPU 怎么指挥设备</h2>
+  <div class="callout life"><div class="co-title">🚚 生活类比</div>
+  CPU 是老板，I/O 设备是外部仓库。老板不可能自己跑去仓库搬货，于是雇了一个<b>仓库管理员（I/O 控制器）</b>：老板只要往管理员的登记本上写「把第 3 号货架的第 2 箱搬到内存」，管理员负责指挥叉车（设备）干活，干完再按铃（中断）通知老板。这个登记本上的格子，就是控制器的<b>寄存器</b>。</div>
+
+  <p><b>I/O 设备分类：</b></p>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>分类角度</th><th>类型</th><th>例子</th><th>特点</th></tr>
+      <tr><td>信息交换单位</td><td>块设备 / 字符设备</td><td>磁盘 / 键盘、打印机</td><td>块设备可寻址、传输以块为单位；字符设备以字节流为单位，通常不可寻址</td></tr>
+      <tr><td>使用特性</td><td>存储设备 / 人机交互设备 / 网络通信设备</td><td>磁盘 / 键盘鼠标显示器 / 网卡</td><td>传输速率与交互方式差异大</td></tr>
+      <tr><td>传输速率</td><td>高速 / 中速 / 低速</td><td>磁盘 / 打印机 / 键盘</td><td>决定缓冲与调度策略</td></tr>
+    </table>
+  </div>
+
+  <h3 class="sub">5.1.1 I/O 控制器与 I/O 端口</h3>
+  <p>I/O 控制器是 CPU 与设备之间的桥梁，通常包含：<b>数据寄存器</b>（暂存传输数据）、<b>控制寄存器</b>（CPU 写入命令）、<b>状态寄存器</b>（设备状态，如忙/就绪/错误）、<b>地址寄存器</b>（DMA 时存放内存地址）。CPU 通过这些寄存器与设备交互，这些寄存器统称 <b>I/O 端口</b>。</p>
+  <div class="split">
+    <div class="card"><h4>端口映射 I/O（PMIO）</h4><p>I/O 端口有独立的地址空间，CPU 用专门的 IN/OUT 指令访问。x86 传统方式。</p></div>
+    <div class="card"><h4>内存映射 I/O（MMIO）</h4><p>把设备寄存器映射到内存地址空间，CPU 用普通 load/store 指令访问，编程更方便。现代设备常用。</p></div>
+  </div>
+
+  <h2 class="sec" id="s2">5.2 四种 I/O 方式：CPU 越来越省心</h2>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>方式</th><th>做法</th><th>CPU 干预频率</th><th>传输单位</th><th>优点 / 缺点</th></tr>
+      <tr><td><b>程序查询</b></td><td>CPU 循环读状态寄存器，设备就绪后由 CPU 搬数据</td><td>最高（忙等）</td><td>字/字节</td><td>简单；CPU 大量空转，利用率低</td></tr>
+      <tr><td><b>中断驱动</b></td><td>CPU 启动设备后去做别的；设备完成一个字节/字后发中断，CPU 来处理</td><td>较高（每字节/字一次中断）</td><td>字/字节</td><td>CPU 不必忙等；中断频繁，开销大</td></tr>
+      <tr><td><b>DMA</b></td><td>DMA 控制器直接在设备与内存之间搬运一整块数据，结束时才中断 CPU</td><td>低（每块一次）</td><td>数据块</td><td>CPU 干预少；DMA 控制器与 CPU 争内存总线</td></tr>
+      <tr><td><b>通道</b></td><td>通道执行通道程序，独立控制多台设备，完成一组 I/O 后才中断</td><td>最低（每组 I/O 一次）</td><td>一组数据块</td><td>CPU 几乎不干预；通道本身是专用处理器，成本高</td></tr>
+    </table>
+  </div>
+
+  <div class="callout exam"><div class="co-title">📌 一句话区分</div>
+  <b>程序查询：</b>CPU 盯着设备干活。<br>
+  <b>中断：</b>设备干完一件小事按一次铃。<br>
+  <b>DMA：</b>设备干完一整块按一次铃。<br>
+  <b>通道：</b>设备干完一整套任务才按一次铃。<br>
+  判断口诀：<b>看「CPU 干预频率」和「传输单位」</b>，不要只背名字。</div>
+
+  <h3 class="sub">DMA 的三种工作方式</h3>
+  <p><b>停止 CPU 访存：</b>DMA 传输时 CPU 不能访存，简单但 CPU 停顿。<b>周期挪用：</b>DMA 每次抢一个总线周期，CPU 只被短暂延迟，最常用。<b>交替访问：</b>CPU 与 DMA 分时使用总线，效率高但硬件复杂。DMA 传输结束后通过中断通知 CPU。</p>
+
+  <h2 class="sec" id="s3">5.3 I/O 软件层次：从上到下，越来越接近硬件</h2>
+  <div class="steps">
+    <div class="step"><b>用户层 I/O 软件。</b>库函数（如 printf/read）、SPOOLing 的用户接口。把用户请求转成系统调用。</div>
+    <div class="step"><b>设备独立性软件。</b>统一命名（逻辑设备名 → 物理设备）、缓冲、缓存、SPOOLing、错误处理、设备保护。它让上层不必关心具体设备。</div>
+    <div class="step"><b>设备驱动程序。</b>与硬件相关：把抽象 I/O 请求翻译成控制器寄存器的读写、启动设备、处理设备特有的时序。</div>
+    <div class="step"><b>中断处理程序。</b>设备完成/出错时保存现场、处理中断、唤醒等待进程。</div>
+    <div class="step"><b>硬件。</b>设备控制器与设备本身。</div>
+  </div>
+  <div class="callout exam"><div class="co-title">📌 设备独立性软件 vs 设备驱动程序</div>
+  <b>设备独立性软件：</b>与具体设备无关，负责「逻辑设备名 → 物理设备」映射（LUT 表）、缓冲、缓存、SPOOLing、权限检查。<br>
+  <b>设备驱动程序：</b>与具体设备强相关，负责「怎么操作这台设备」——寄存器地址、命令字、时序。<br>
+  选择题常问「哪一层负责逻辑设备名到物理设备名的映射」——设备独立性软件。</div>
+
+  <h2 class="sec" id="s4">5.4 缓冲区：抹平 CPU 与设备的速度差</h2>
+  <div class="callout life"><div class="co-title">🧺 生活类比</div>
+  设备像一辆一趟只能拉一箱货的小车，CPU 像一条流水线。没有缓冲区，流水线要停下来等小车；有了缓冲区，小车先把货卸到暂存区（缓冲区），流水线从暂存区取货，双方都能连续工作。缓冲区就是「以空间换时间」。</div>
+
+  <p>设：<b>T</b> = 设备把一块数据输入缓冲区的时间；<b>M</b> = 缓冲区数据传到用户区的时间；<b>C</b> = CPU 处理这块数据的时间。</p>
+  <div class="formula"><span class="fx-label">单缓冲</span>
+  每块平均处理时间 = max(C, T) + M<br>
+  处理 n 块总时间 ≈ n × [max(C, T) + M]</div>
+  <div class="formula"><span class="fx-label">双缓冲</span>
+  每块平均处理时间 = max(C + M, T)<br>
+  处理 n 块总时间 ≈ n × max(C + M, T)</div>
+  <div class="callout"><div class="co-title">🧮 例：T=100ms，C=80ms，M=50ms</div>
+  单缓冲：max(80,100)+50 = <b>150ms/块</b>；双缓冲：max(80+50,100) = <b>130ms/块</b>。双缓冲让设备与 CPU 的重叠更好，但要多一块缓冲区。若 T 很小、C 很大，双缓冲的收益就不明显。</div>
+
+  <h3 class="sub">缓冲的类型</h3>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>类型</th><th>做法</th><th>适用</th></tr>
+      <tr><td>单缓冲</td><td>一块缓冲区，设备与 CPU 轮流用</td><td>简单场景，速度差不大</td></tr>
+      <tr><td>双缓冲</td><td>两块缓冲区，设备填一块时 CPU 处理另一块</td><td>速度差较大，需连续传输</td></tr>
+      <tr><td>循环缓冲</td><td>多个缓冲区组成环形队列，输入/输出指针移动</td><td>连续、突发数据流</td></tr>
+      <tr><td>缓冲池</td><td>系统维护空缓冲队列、输入队列、输出队列，按需取用</td><td>多设备、多进程共享，最通用</td></tr>
+    </table>
+  </div>
+  <p><b>缓冲 vs 缓存：</b>缓冲（buffer）是为了「速度匹配」，存放的是传输中的临时数据；缓存（cache）是为了「减少访问」，存放的是数据的副本，可能重复使用。两者目的不同，别混。</p>
+
+  <h2 class="sec" id="s5">5.5 设备分配：把设备借给谁</h2>
+  <p>设备分配的数据结构有四张表：<b>SDT</b>（系统设备表，记录所有设备）、<b>DCT</b>（设备控制表，每台设备一张）、<b>COCT</b>（控制器控制表）、<b>CHCT</b>（通道控制表）。分配时从 SDT 找到设备，再逐级检查控制器、通道是否可用。</p>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>策略</th><th>含义</th><th>例子</th></tr>
+      <tr><td>独占设备</td><td>一次只能分配给一个进程，直到释放</td><td>打印机、磁带机</td></tr>
+      <tr><td>共享设备</td><td>可同时分配给多个进程，交替使用</td><td>磁盘（按扇区/块共享）</td></tr>
+      <tr><td>虚拟设备</td><td>用 SPOOLing 把独占设备虚拟成共享设备</td><td>打印机通过输出井共享</td></tr>
+    </table>
+  </div>
+  <p><b>静态分配</b>在作业开始前一次性分配所需设备，简单但利用率低；<b>动态分配</b>在需要时申请、用完释放，利用率高但可能死锁。分配时要考虑安全性，常用「按序分配」破坏循环等待。</p>
+
+  <h2 class="sec" id="s6">5.6 SPOOLing：把一台打印机变成很多台</h2>
+  <p>SPOOLing（假脱机）在磁盘上开辟<b>输入井</b>和<b>输出井</b>，用<b>预输入程序</b>把输入设备的数据提前读入输入井，用<b>缓输出程序</b>把输出井的数据慢慢写到设备。用户进程不再直接操作独占设备，而是读写井中的文件——于是独占设备被「虚拟」成共享设备。</p>
+  <div class="steps">
+    <div class="step">用户进程要打印时，把输出内容写入磁盘的输出井，并登记一张打印请求表。</div>
+    <div class="step">SPOOLing 系统为每个请求创建一个「虚拟打印机」，进程立刻认为打印完成，可以继续运行。</div>
+    <div class="step">缓输出程序按队列顺序从输出井取数据，真正驱动打印机输出。</div>
+    <div class="step">打印机是独占的，但多个进程可以「同时」提交打印任务，互不阻塞。</div>
+  </div>
+  <div class="callout exam"><div class="co-title">📌 SPOOLing 的条件与代价</div>
+  需要：<b>磁盘</b>（存放输入井/输出井）、<b>通道</b>（让数据搬运与 CPU 并行）、<b>中断</b>（通知完成）。<br>
+  优点：把独占设备虚拟为共享设备，提高利用率；用户进程不必等待慢设备。<br>
+  代价：占用磁盘空间；输出井满时仍会阻塞；实现比普通缓冲复杂。</div>
+
+  <h2 class="sec" id="s7">5.7 磁盘缓存：内存里的「磁盘副本」</h2>
+  <p>磁盘缓存把最近读过的磁盘块放在内存中，下次访问先查缓存。命中则直接返回，未命中再读磁盘。它和缓冲区不同：缓存是为了减少磁盘访问，缓冲区是为了匹配速度。</p>
+  <div class="split">
+    <div class="card"><h4>写回（write-back）</h4><p>先写缓存，标记脏页，稍后再写磁盘。写快，但掉电可能丢数据。</p></div>
+    <div class="card"><h4>写穿（write-through）</h4><p>每次写都同时写缓存和磁盘。数据安全，但写性能差。</p></div>
+  </div>
+  <p>磁盘缓存的命中率受缓存容量、替换算法、访问局部性影响。缓存与磁盘调度配合：先看缓存是否命中，未命中才产生磁盘 I/O，再由调度算法决定磁头顺序。</p>
+
+  <h2 class="sec" id="deep">🚀 进阶深挖（教材级）</h2>
+  <h3 class="sub">深挖 1 · 一次 read 系统调用的完整路径</h3>
+  <p>用户调用 <code class="inline">read(fd, buf, n)</code> → 系统调用进入内核 → 设备独立性软件检查参数、查缓存 → 缓存未命中则调用设备驱动程序 → 驱动程序写控制器寄存器启动 DMA → 进程阻塞，调度其他进程 → DMA 完成，设备发中断 → 中断处理程序唤醒进程 → 数据从内核缓冲区拷贝到用户 buf → 返回用户态。这条路径把本章所有概念串起来了。</p>
+
+  <h3 class="sub">深挖 2 · 中断驱动与 DMA 的 CPU 开销对比</h3>
+  <p>假设传输 1MB 数据，每次中断处理 1KB：中断方式需要 1024 次中断；若每次中断开销 5μs，仅中断就 5.12ms。DMA 以 4KB 为一块，只需 256 次中断，开销降到 1.28ms，且数据搬运不占 CPU。块越大，CPU 干预越少，但 DMA 占用总线时间越长，响应延迟可能变大。</p>
+
+  <h3 class="sub">深挖 3 · 缓冲池怎么工作</h3>
+  <p>缓冲池由三类队列组成：<b>空缓冲队列</b>（可用缓冲区）、<b>输入队列</b>（装满输入数据待处理）、<b>输出队列</b>（装满输出数据待写出）。进程需要输入时，从空队列取一个缓冲，填入数据后挂到输入队列；需要输出时，从空队列取一个，填入数据后挂到输出队列。缓冲区在队列之间移动，实现多设备、多进程共享。</p>
+
+  <h3 class="sub">深挖 4 · I/O 与虚拟内存的交叉</h3>
+  <p>DMA 需要访问的内存页必须常驻且物理地址固定，否则传输到一半页面被换出会出错。OS 通常把 DMA 缓冲区「钉住」（pin）在内存中，或使用物理地址连续的缓冲区。这也是为什么高性能 I/O 常用「零拷贝」：减少用户态/内核态之间的数据拷贝，让数据直接从磁盘页缓存送到网卡。</p>
+
+  <div class="callout views"><div class="co-title">🌐 多源视角（不同教材的讲法）</div>
+  <ul>
+    <li><b>【汤小丹】I/O 系统 = 设备管理 + 缓冲 + 设备分配 + SPOOLing：</b>先讲 I/O 硬件，再讲 I/O 控制方式，最后讲软件层次。本站顺序一致。</li>
+    <li><b>【王道】四种 I/O 方式用「CPU 干预频率」对比：</b>程序查询每时每刻、中断每字节、DMA 每块、通道每组。抓住这条线，选择题不会混。</li>
+    <li><b>【OSTEP】I/O 是「设备 + 驱动 + 中断」：</b>设备通过寄存器暴露接口，驱动负责操作，中断负责通知完成；DMA 让 CPU 从搬运中解放。与 408 的中断/DMA 完全对应。</li>
+  </ul>
+  <div class="src">参考：汤小丹《计算机操作系统（第四版）》第 5 章；王道《操作系统考研复习指导》第 5 章；OSTEP 第 36~37 章</div></div>
+
+  <h2 class="sec" id="lesson">🎬 动画课堂 · 第 5 集《一次读盘的接力》</h2>
+  <p>从设备、控制器、程序查询、中断、DMA、通道，到缓冲与 SPOOLing，看一次读盘请求怎样接力完成。</p>
+  <div id="lesson-box"></div>
+
+  <h2 class="sec" id="lab">🔬 实验室：单缓冲 vs 双缓冲</h2>
+  <div class="lab" id="lab-buf">
+    <div class="lab-title">改 T/M/C，看处理时间怎么变 <span class="chip">缓冲区公式</span></div>
+    <div class="lab-desc">T = 设备输入一块的时间，M = 缓冲区传到用户区，C = CPU 处理时间。比较单缓冲与双缓冲的每块时间与总时间。</div>
+    <div class="lab-stage">
+      <div id="buf-out" style="font-size:15px;margin-bottom:12px"></div>
+      <div class="bars" id="buf-bars"></div>
+      <div id="buf-note" class="small muted" style="margin-top:10px"></div>
+    </div>
+    <div class="lab-ctrl">
+      <label>T（输入）：<input id="buf-t" type="number" min="1" value="100"></label>
+      <label>M（传送）：<input id="buf-m" type="number" min="1" value="50"></label>
+      <label>C（处理）：<input id="buf-c" type="number" min="1" value="80"></label>
+      <label>块数 N：<input id="buf-n" type="number" min="1" value="10"></label>
+      <button id="buf-run">计算</button>
+      <button id="buf-reset" class="ghost">恢复默认</button>
+    </div>
+    <div class="lab-note" id="buf-tip"></div>
+  </div>
+
+  <h2 class="sec" id="pit">⚠️ 本章避坑清单</h2>
+  <div class="steps plain">
+    <div class="step">块设备可寻址、以块为单位；字符设备以字节流为单位，通常不可寻址。</div>
+    <div class="step">程序查询是 CPU 忙等；中断是每字节/字一次；DMA 是每块一次；通道是一组 I/O 一次。</div>
+    <div class="step">DMA 传输结束后才中断，不是每字节都中断。</div>
+    <div class="step">设备独立性软件负责逻辑设备名映射；设备驱动程序负责具体硬件操作。</div>
+    <div class="step">单缓冲 max(C,T)+M；双缓冲 max(C+M,T)。别把 M 漏掉或重复加。</div>
+    <div class="step">缓冲（buffer）匹配速度；缓存（cache）减少访问。两者不是一回事。</div>
+    <div class="step">SPOOLing 需要磁盘和通道，把独占设备虚拟成共享设备；它不是普通内存缓冲。</div>
+    <div class="step">设备分配四张表：SDT、DCT、COCT、CHCT；静态分配简单但利用率低，动态分配可能死锁。</div>
+  </div>
+
+  <h2 class="sec" id="quiz">📝 章内练习（16 题 · 基础 → 提高 → 真题改编）</h2>
+
+  <h3 class="sub" style="color:var(--green)">🟢 第一档 · 基础（4 题）</h3>
+
+  <div class="quiz" data-answer="B" data-diff="basic">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl basic">基础</span>练习 1 · 考点：设备分类</div>
+    下列设备中，属于字符设备的是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 磁盘</div>
+      <div class="opt" data-opt="B">B. 键盘</div>
+      <div class="opt" data-opt="C">C. 光盘</div>
+      <div class="opt" data-opt="D">D. 固态硬盘</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 B。键盘以字节流方式输入，通常不可寻址，属于字符设备。磁盘、光盘、SSD 都以数据块为单位存取，属于块设备。</div>
+  </div>
+
+  <div class="quiz" data-answer="C" data-diff="basic">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl basic">基础</span>练习 2 · 考点：I/O 控制器</div>
+    I/O 控制器中，CPU 用来读取设备状态（忙/就绪/错误）的部件是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 数据寄存器</div>
+      <div class="opt" data-opt="B">B. 控制寄存器</div>
+      <div class="opt" data-opt="C">C. 状态寄存器</div>
+      <div class="opt" data-opt="D">D. 地址寄存器</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 C。状态寄存器保存设备当前状态（忙、就绪、错误等）；数据寄存器暂存传输数据；控制寄存器接收 CPU 命令；地址寄存器在 DMA 时保存内存地址。</div>
+  </div>
+
+  <div class="quiz" data-answer="A" data-diff="basic">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl basic">基础</span>练习 3 · 考点：程序查询</div>
+    程序查询方式的主要缺点是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. CPU 忙等设备状态，利用率低</div>
+      <div class="opt" data-opt="B">B. 每次传输都要 DMA 控制器参与</div>
+      <div class="opt" data-opt="C">C. 只能用于块设备</div>
+      <div class="opt" data-opt="D">D. 不需要设备驱动程序</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 A。程序查询由 CPU 循环读取状态寄存器，设备没就绪就一直空转，CPU 无法做别的事。B 是 DMA 的特点；C 错，字符设备也能查询；D 错，任何 I/O 都需要驱动/控制逻辑。</div>
+  </div>
+
+  <div class="quiz" data-answer="D" data-diff="basic">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl basic">基础</span>练习 4 · 考点：DMA</div>
+    DMA 方式下，CPU 通常在什么时候被中断？</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 每传输一个字节中断一次</div>
+      <div class="opt" data-opt="B">B. 每传输一个字中断一次</div>
+      <div class="opt" data-opt="C">C. 设备启动时中断一次</div>
+      <div class="opt" data-opt="D">D. 一整块数据传输完成后中断一次</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 D。DMA 控制器负责在设备与内存之间搬运整块数据，CPU 只在传输开始前设置参数、传输结束后处理中断。A、B 是中断驱动方式；C 错，启动时是 CPU 写寄存器，不是中断。</div>
+  </div>
+
+  <h3 class="sub" style="color:var(--accent)">🟡 第二档 · 提高（4 题）</h3>
+
+  <div class="quiz" data-answer="B" data-diff="mid">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl mid">提高</span>练习 5 · 考点：通道</div>
+    与 DMA 相比，通道的主要优势是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 不需要中断</div>
+      <div class="opt" data-opt="B">B. 能执行通道程序，独立控制多台设备完成一组 I/O，进一步减少 CPU 干预</div>
+      <div class="opt" data-opt="C">C. 传输速度一定比 DMA 慢</div>
+      <div class="opt" data-opt="D">D. 只能连接字符设备</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 B。通道是一个专用的 I/O 处理器，能执行通道程序，控制多台设备完成一组 I/O，CPU 只需在开始时启动、结束时处理中断。A 错，通道完成时仍用中断通知；C 错，通道通常更强；D 错，通道可连接块设备和字符设备。</div>
+  </div>
+
+  <div class="quiz" data-answer="C" data-diff="mid">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl mid">提高</span>练习 6 · 考点：I/O 软件层次</div>
+    负责「逻辑设备名到物理设备名映射」的是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 用户层 I/O 软件</div>
+      <div class="opt" data-opt="B">B. 设备驱动程序</div>
+      <div class="opt" data-opt="C">C. 设备独立性软件</div>
+      <div class="opt" data-opt="D">D. 中断处理程序</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 C。设备独立性软件通过逻辑设备表（LUT）把用户使用的逻辑设备名映射到物理设备，并负责缓冲、缓存、SPOOLing、保护等。设备驱动程序负责具体硬件操作；用户层只是库函数；中断处理负责完成通知。</div>
+  </div>
+
+  <div class="quiz" data-answer="A" data-diff="mid">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl mid">提高</span>练习 7 · 考点：单缓冲计算</div>
+    T=100ms，M=50ms，C=80ms，采用单缓冲，每块数据的平均处理时间是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 150ms</div>
+      <div class="opt" data-opt="B">B. 130ms</div>
+      <div class="opt" data-opt="C">C. 100ms</div>
+      <div class="opt" data-opt="D">D. 230ms</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 A。单缓冲：max(C,T)+M = max(80,100)+50 = 100+50 = 150ms。B 是双缓冲的结果 max(80+50,100)=130ms；C 漏了 M；D 把三个量直接相加。</div>
+  </div>
+
+  <div class="quiz" data-answer="B" data-diff="mid">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl mid">提高</span>练习 8 · 考点：双缓冲计算</div>
+    T=100ms，M=50ms，C=80ms，采用双缓冲，每块数据的平均处理时间是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 150ms</div>
+      <div class="opt" data-opt="B">B. 130ms</div>
+      <div class="opt" data-opt="C">C. 100ms</div>
+      <div class="opt" data-opt="D">D. 180ms</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 B。双缓冲：max(C+M,T) = max(80+50,100) = 130ms。双缓冲让设备填一块时 CPU 处理另一块，所以比单缓冲的 150ms 快；但若 T 远大于 C+M，瓶颈仍在设备，双缓冲也帮不上。</div>
+  </div>
+
+  <h3 class="sub" style="color:var(--brand)">🔴 第三档 · 真题改编（8 题 · 题型对标）</h3>
+
+  <div class="quiz" data-answer="D" data-diff="real" data-year="2012">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2012 题型</span>练习 9 · 考点：中断驱动</div>
+    中断驱动 I/O 方式中，CPU 的干预频率通常是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 每个数据块一次</div>
+      <div class="opt" data-opt="B">B. 每组 I/O 一次</div>
+      <div class="opt" data-opt="C">C. 从不需要干预</div>
+      <div class="opt" data-opt="D">D. 每传输一个字节/字一次</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 D。中断驱动方式下，设备每完成一个字节/字的传输就发一次中断，CPU 中断频繁、开销大。A 是 DMA；B 是通道；C 任何 I/O 都需要 CPU 至少启动和收尾。</div>
+  </div>
+
+  <div class="quiz" data-answer="B" data-diff="real" data-year="2014">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2014 题型</span>练习 10 · 考点：SPOOLing</div>
+    SPOOLing 技术的主要作用是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 提高 CPU 主频</div>
+      <div class="opt" data-opt="B">B. 把独占设备虚拟成共享设备，提高设备利用率</div>
+      <div class="opt" data-opt="C">C. 减少磁盘容量占用</div>
+      <div class="opt" data-opt="D">D. 替代所有内存缓冲</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 B。SPOOLing 用磁盘上的输入井/输出井 + 预输入/缓输出程序，让多个进程「同时」使用一台独占设备（如打印机），把独占设备虚拟成共享设备。它不提高主频、反而占磁盘，也不能替代内存缓冲。</div>
+  </div>
+
+  <div class="quiz" data-answer="C" data-diff="real" data-year="2016">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2016 题型</span>练习 11 · 考点：缓冲 vs 缓存</div>
+    下列关于缓冲（buffer）与缓存（cache）的说法，正确的是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 两者目的相同，都是减少磁盘访问</div>
+      <div class="opt" data-opt="B">B. 缓冲存放数据副本，缓存存放传输中的临时数据</div>
+      <div class="opt" data-opt="C">C. 缓冲主要用于匹配速度，缓存主要用于减少重复访问</div>
+      <div class="opt" data-opt="D">D. 缓存一定在磁盘上，缓冲一定在内存中</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 C。缓冲解决 CPU 与设备速度不匹配，存放传输中的临时数据；缓存存放数据副本，减少对慢速存储的重复访问。B 说反了；A 混淆目的；D 错，缓存也可以在内存/CPU 中。</div>
+  </div>
+
+  <div class="quiz" data-answer="A" data-diff="real" data-year="2018">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2018 题型</span>练习 12 · 考点：DMA 中断次数</div>
+    传输 1MB 数据，DMA 每次传输 4KB 块，传输完成后中断一次。整个传输过程中 CPU 被中断的次数约为：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 256 次</div>
+      <div class="opt" data-opt="B">B. 1024 次</div>
+      <div class="opt" data-opt="C">C. 1 次</div>
+      <div class="opt" data-opt="D">D. 4096 次</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 A。1MB / 4KB = 256 块，每块完成中断一次，共 256 次。B 是每次中断传 1KB 的中断驱动方式；C 是通道方式完成一整组 I/O 才中断一次；D 是每次传 256B 的情况。</div>
+  </div>
+
+  <div class="quiz" data-answer="D" data-diff="real" data-year="2013">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2013 题型</span>练习 13 · 考点：设备分配表</div>
+    设备分配中，记录系统中所有设备情况的总表是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. DCT（设备控制表）</div>
+      <div class="opt" data-opt="B">B. COCT（控制器控制表）</div>
+      <div class="opt" data-opt="C">C. CHCT（通道控制表）</div>
+      <div class="opt" data-opt="D">D. SDT（系统设备表）</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 D。SDT 是整个系统的设备总表，每个表项指向一台设备的 DCT；DCT 记录单台设备状态，COCT 记录控制器，CHCT 记录通道。分配时从 SDT 出发逐级检查。</div>
+  </div>
+
+  <div class="quiz" data-answer="B" data-diff="real" data-year="2015">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2015 题型</span>练习 14 · 考点：虚拟设备</div>
+    下列设备中，通常通过 SPOOLing 被虚拟成共享设备的是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 磁盘</div>
+      <div class="opt" data-opt="B">B. 打印机</div>
+      <div class="opt" data-opt="C">C. 内存</div>
+      <div class="opt" data-opt="D">D. CPU</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 B。打印机是典型的独占设备，SPOOLing 用输出井把多个打印任务排队，让每个进程都以为自己独占打印机。磁盘本来就是共享设备；内存和 CPU 不是 I/O 设备。</div>
+  </div>
+
+  <div class="quiz" data-answer="C" data-diff="real" data-year="2019">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2019 题型</span>练习 15 · 考点：磁盘缓存写策略</div>
+    磁盘缓存采用写回（write-back）策略时，下列说法正确的是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 每次写都同时写磁盘，数据最安全</div>
+      <div class="opt" data-opt="B">B. 写缓存后立即丢弃，不写磁盘</div>
+      <div class="opt" data-opt="C">C. 先写缓存并标记脏页，稍后再写磁盘；掉电可能丢失未写回数据</div>
+      <div class="opt" data-opt="D">D. 只适用于只读文件</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 C。写回策略先写缓存、标记脏页，延迟写磁盘，写性能好，但掉电可能丢数据。A 是写穿；B 不是正常策略；D 错，写回用于可写数据。</div>
+  </div>
+
+  <div class="quiz" data-answer="A" data-diff="real" data-year="2021">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2021 题型</span>练习 16 · 考点：I/O 方式综合</div>
+    下列四种 I/O 方式中，CPU 干预频率从高到低排列正确的是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 程序查询 &gt; 中断驱动 &gt; DMA &gt; 通道</div>
+      <div class="opt" data-opt="B">B. 通道 &gt; DMA &gt; 中断驱动 &gt; 程序查询</div>
+      <div class="opt" data-opt="C">C. 中断驱动 &gt; 程序查询 &gt; 通道 &gt; DMA</div>
+      <div class="opt" data-opt="D">D. DMA &gt; 通道 &gt; 程序查询 &gt; 中断驱动</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 A。程序查询 CPU 一直忙等；中断驱动每字节/字中断；DMA 每块中断；通道每组 I/O 才中断。干预频率依次降低。记住「查询 &gt; 中断 &gt; DMA &gt; 通道」。</div>
+  </div>
+
+  <h2 class="sec" id="ck">✅ 本章打卡清单 <span class="progress-pill">0 / 6 已打卡</span></h2>
+  <div class="checklist" data-ck-scope>
+    <label class="check-item" data-ck="ch05-1"><input type="checkbox"><span>能区分块设备/字符设备，说清 I/O 控制器四类寄存器</span></label>
+    <label class="check-item" data-ck="ch05-2"><input type="checkbox"><span>能按 CPU 干预频率排列四种 I/O 方式，并说清 DMA 的三种工作方式</span></label>
+    <label class="check-item" data-ck="ch05-3"><input type="checkbox"><span>能画出 I/O 软件四层，区分设备独立性软件与设备驱动程序</span></label>
+    <label class="check-item" data-ck="ch05-4"><input type="checkbox"><span>能默写单缓冲/双缓冲公式并手算每块时间</span></label>
+    <label class="check-item" data-ck="ch05-5"><input type="checkbox"><span>能说清 SPOOLing 的原理、条件与「虚拟设备」</span></label>
+    <label class="check-item" data-ck="ch05-6"><input type="checkbox"><span>完成章内 16 题，错题能说出错因并收藏/重做</span></label>
+  </div>
+
+  <p class="center" style="margin-top:28px"><a class="btn" href="practice.html">去练习场做跨章组卷 →</a></p>
+</div>
+
+<footer>
+  408 操作系统可视化课堂 · 第 5 章<br>
+  <div class="pagers"><a href="ch04.html">上一章</a><a href="index.html">总览</a><a href="practice.html">练习场</a></div>
+</footer>
+
+<script src="assets/app.js"></script>
+<script src="assets/lesson-ch05.js"></script>
+<script src="assets/lesson-player.js"></script>
+<script>
+/* 实验室：单缓冲 / 双缓冲 */
+(function () {
+  var out = document.getElementById("buf-out");
+  var bars = document.getElementById("buf-bars");
+  var note = document.getElementById("buf-note");
+  var tip = document.getElementById("buf-tip");
+  if (!out) return;
+  function run() {
+    var T = Math.max(1, parseFloat(document.getElementById("buf-t").value) || 100);
+    var M = Math.max(1, parseFloat(document.getElementById("buf-m").value) || 50);
+    var C = Math.max(1, parseFloat(document.getElementById("buf-c").value) || 80);
+    var N = Math.max(1, parseInt(document.getElementById("buf-n").value, 10) || 10);
+    var single = Math.max(C, T) + M;
+    var dbl = Math.max(C + M, T);
+    var totalS = single * N, totalD = dbl * N;
+    out.innerHTML = "单缓冲每块 <b>" + single.toFixed(2) + " ms</b>，N=" + N + " 总 <b>" + totalS.toFixed(2) + " ms</b>；双缓冲每块 <b>" + dbl.toFixed(2) + " ms</b>，总 <b>" + totalD.toFixed(2) + " ms</b>。";
+    var max = Math.max(single, dbl);
+    bars.innerHTML =
+      '<div class="bar-row"><span class="b-label">单缓冲 / 块</span><div class="bar-track"><div class="bar-fill" style="width:' + (single / max * 100) + '%"></div></div><span class="b-val">' + single.toFixed(1) + ' ms</span></div>' +
+      '<div class="bar-row"><span class="b-label">双缓冲 / 块</span><div class="bar-track"><div class="bar-fill warn" style="width:' + (dbl / max * 100) + '%"></div></div><span class="b-val">' + dbl.toFixed(1) + ' ms</span></div>';
+    note.innerHTML = "单缓冲 = max(C,T)+M = max(" + C + "," + T + ")+" + M + "；双缓冲 = max(C+M,T) = max(" + (C + M) + "," + T + ")。";
+    var bottleneck = T > C + M ? "设备输入是瓶颈（T > C+M）：双缓冲最多把每块压到 T=" + T + "ms，无法低于设备速度" : "CPU 处理/传送是瓶颈（C+M ≥ T）：双缓冲能明显提速";
+    tip.innerHTML = "当前：<b>" + bottleneck + "</b>。双缓冲相对单缓冲节省 " + ((1 - dbl / single) * 100).toFixed(1) + "%。";
+  }
+  document.getElementById("buf-run").addEventListener("click", run);
+  ["buf-t", "buf-m", "buf-c", "buf-n"].forEach(function (id) {
+    document.getElementById(id).addEventListener("change", run);
+  });
+  document.getElementById("buf-reset").addEventListener("click", function () {
+    document.getElementById("buf-t").value = 100;
+    document.getElementById("buf-m").value = 50;
+    document.getElementById("buf-c").value = 80;
+    document.getElementById("buf-n").value = 10;
+    run();
+  });
+  run();
+})();
+</script>
+</body>
+</html>

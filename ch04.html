@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第 4 章 文件管理 · 408 操作系统可视化课堂</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<nav class="topbar"><div class="topbar-inner">
+  <a class="logo" href="index.html"><span class="dot"></span>408 操作系统可视化课堂</a>
+  <div class="nav-links">
+    <a href="index.html">总览</a><a href="ch01.html">系统概述</a><a href="ch02.html">进程与线程</a><a href="ch03.html">内存管理</a><a href="ch04.html">文件管理</a><a href="ch05.html">I/O 管理</a><a href="practice.html">练习场</a><a href="method.html">备考方法论</a><a href="resources.html">资源导航</a>
+  </div>
+  <button class="theme-btn" title="切换明暗主题">🌙</button>
+</div></nav>
+
+<div class="wrap">
+  <div class="hero">
+    <h1>第 4 章 · 文件管理</h1>
+    <p>文件管理把「一堆磁盘块」变成「有名字、有目录、能共享、能保护」的文件。408 这章计算题很稳定：索引容量、位示图、磁盘调度、存取时间，套路固定，拿分性价比高。</p>
+    <p class="tagline">预计学习 5~7 小时 · 动画 1 集 · 实验室 2 个 · 练习 16 题 · 打卡 6 项</p>
+  </div>
+
+  <div class="toc"><span class="toc-label">本页导航</span><a href="#goal">学习目标</a><a href="#s1">文件与目录</a><a href="#s2">逻辑结构</a><a href="#s3">物理结构</a><a href="#s4">空闲空间</a><a href="#s5">文件系统布局</a><a href="#s6">磁盘</a><a href="#s7">磁盘调度</a><a href="#s8">SSD</a><a href="#deep">进阶深挖</a><a href="#lesson">动画课堂</a><a href="#lab1">磁盘调度</a><a href="#lab2">索引容量</a><a href="#pit">避坑清单</a><a href="#quiz">章内练习</a><a href="#ck">打卡</a></div>
+
+  <div class="callout exam" id="goal"><div class="co-title">🎯 学习目标（学完你应该能）</div>
+  ① 说清文件的逻辑结构与物理结构的区别，列举四种目录结构；<br>
+  ② 区分硬链接与软链接，知道删除文件时各自发生什么；<br>
+  ③ 比较连续、链接、索引三种分配方式的优缺点，算 FAT 大小；<br>
+  ④ 用混合索引算最大文件大小，用位示图算字号/位号；<br>
+  ⑤ 算磁盘存取时间（寻道 + 旋转 + 传输），手推 FCFS/SSTF/SCAN/C-SCAN 的磁头移动；<br>
+  ⑥ 说清 SSD 的读写特性、FTL 与磨损均衡。</div>
+
+  <h2 class="sec" id="s1">4.1 文件与目录：给磁盘块起名字</h2>
+  <div class="callout life"><div class="co-title">🗄️ 生活类比</div>
+  磁盘像一间巨大的仓库，里面全是编号的格子（磁盘块）。如果没有文件系统，你只能记「我的照片在第 183729 号格子」——不现实。文件系统给你三样东西：<b>文件名</b>（好记的标签）、<b>目录</b>（仓库的货架分区）、<b>文件控制块/inode</b>（每个文件的档案，记录它占了哪些格子）。</div>
+
+  <p><b>文件</b>是以计算机硬盘为载体的、相关信息的集合。文件属性通常包括：名称、标识符（inode 号）、类型、位置、大小、保护权限、所有者、时间戳（创建/修改/访问）。</p>
+  <p><b>文件的基本操作：</b>创建、删除、打开、关闭、读、写、定位（seek）、截断。注意「打开」不是把整个文件读进内存，而是把文件的 FCB/inode 调入内存的打开文件表，返回一个<b>文件描述符（fd）</b>；后续读写都用 fd，避免每次重新查目录。</p>
+
+  <h3 class="sub">4.1.1 打开文件表</h3>
+  <div class="split">
+    <div class="card"><h4>系统级打开文件表</h4><p>全系统一张，记录每个已打开文件的 inode、打开计数、读写偏移等。多个进程打开同一文件时共享同一表项。</p></div>
+    <div class="card"><h4>进程级打开文件表</h4><p>每个进程一张，记录 fd → 系统表项的指针、本进程的读写偏移、访问模式。fork 后子进程继承父进程的 fd 表。</p></div>
+  </div>
+
+  <h3 class="sub">4.1.2 目录结构</h3>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>结构</th><th>做法</th><th>优点</th><th>缺点</th></tr>
+      <tr><td>单级目录</td><td>整个系统一张目录表，文件名唯一</td><td>简单</td><td>重名冲突、查找慢、不便于共享</td></tr>
+      <tr><td>两级目录</td><td>主目录 + 用户目录</td><td>解决重名，隔离用户</td><td>用户之间共享不便</td></tr>
+      <tr><td>树形目录</td><td>多级目录树，路径名定位</td><td>层次清晰、易管理、支持重名</td><td>查找要逐级解析路径</td></tr>
+      <tr><td>无环图目录</td><td>目录项可指向同一文件/子目录，允许共享</td><td>支持文件共享</td><td>需要引用计数，删除复杂</td></tr>
+    </table>
+  </div>
+  <p>目录项通常只存「文件名 + inode 号」，真正的文件属性放在 inode 里。目录的实现有线性列表（简单、查找 O(n)）和哈希表（查找快、需处理冲突）。</p>
+
+  <h3 class="sub">4.1.3 文件共享：硬链接 vs 软链接</h3>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th></th><th>硬链接（hard link）</th><th>软链接（symbolic link）</th></tr>
+      <tr><td>本质</td><td>多个目录项指向同一个 inode</td><td>新建一个文件，内容是目标文件的路径</td></tr>
+      <tr><td>inode</td><td>共享同一个 inode，链接计数 +1</td><td>有自己的 inode</td></tr>
+      <tr><td>删除原文件</td><td>只要链接计数 &gt; 0，数据仍在</td><td>原文件删除后，软链接变成悬空链接</td></tr>
+      <tr><td>跨文件系统</td><td>不能</td><td>可以</td></tr>
+      <tr><td>访问开销</td><td>直接访问，开销小</td><td>需要解析路径，多一次访问</td></tr>
+    </table>
+  </div>
+  <p><b>保护</b>常用访问控制列表（ACL）和权限位（Linux 的 rwxr-xr-x）。权限位分所有者/组/其他人三组，分别控制读、写、执行。</p>
+
+  <h2 class="sec" id="s2">4.2 文件的逻辑结构：用户看到的样子</h2>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>结构</th><th>组织方式</th><th>适用</th><th>访问方式</th></tr>
+      <tr><td>无结构文件（流式）</td><td>字节流，不划分记录</td><td>文本、图片、可执行文件</td><td>按字节读写、seek</td></tr>
+      <tr><td>顺序文件</td><td>记录顺序排列，可定长/变长</td><td>批量处理、日志</td><td>顺序访问快，随机访问需扫描</td></tr>
+      <tr><td>索引文件</td><td>为记录建索引表，索引项指向记录</td><td>需要按关键字快速检索</td><td>查索引 + 访问记录</td></tr>
+      <tr><td>索引顺序文件</td><td>记录分块，块间建索引，块内顺序</td><td>大型数据库文件</td><td>先查索引块，再块内顺序找</td></tr>
+    </table>
+  </div>
+  <p class="muted small">注意：逻辑结构是「文件内部记录怎么组织」，物理结构是「文件占用哪些磁盘块」，两者不是一回事，选择题常混。</p>
+
+  <h2 class="sec" id="s3">4.3 文件的物理结构：磁盘上怎么放</h2>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>方式</th><th>做法</th><th>优点</th><th>缺点</th></tr>
+      <tr><td><b>连续分配</b></td><td>文件占一段连续的磁盘块，目录项记录起始块号 + 长度</td><td>顺序/随机访问都快，寻道少</td><td>外部碎片；文件扩展困难；需预知大小</td></tr>
+      <tr><td><b>链接分配（隐式）</b></td><td>每个块含指向下一块的指针，目录项记录首块/尾块</td><td>无外部碎片，文件可动态增长</td><td>只能顺序访问；指针占空间；一个块坏了链就断</td></tr>
+      <tr><td><b>链接分配（显式 FAT）</b></td><td>把所有「下一块」指针集中到文件分配表 FAT，FAT 常驻内存</td><td>支持随机访问（沿 FAT 跳）；无外部碎片</td><td>FAT 占内存；FAT 表项数 = 磁盘块数</td></tr>
+      <tr><td><b>索引分配</b></td><td>为文件建索引块，存放该文件所有块的块号</td><td>支持随机访问，文件可动态增长</td><td>索引块占空间；大文件需多级/混合索引</td></tr>
+    </table>
+  </div>
+
+  <h3 class="sub">4.3.1 FAT 计算</h3>
+  <p>FAT 的每个表项对应一个磁盘块，记录「下一块」的块号。若磁盘有 N 个块、每个表项占 k 字节，则 FAT 大小 = N × k。N 通常由磁盘容量 ÷ 块大小得到。例：1GB 磁盘、4KB 块 → 2¹⁸ 个块；表项 4B → FAT 大小 1MB。</p>
+
+  <h3 class="sub">4.3.2 混合索引：最大文件大小怎么算</h3>
+  <p>UNIX 风格 inode 含：若干个<b>直接地址</b>、一个<b>一级间接</b>、一个<b>二级间接</b>、一个<b>三级间接</b>。设块大小 B、地址大小 a，则每个索引块可存 <code class="inline">B/a</code> 个指针，记为 P。</p>
+  <div class="formula"><span class="fx-label">混合索引最大文件大小</span>
+  最大字节数 = 直接项数 × B + P × B + P² × B + P³ × B<br>
+  若有 d 个直接项：= (d + P + P² + P³) × B</div>
+  <div class="callout exam"><div class="co-title">📌 经典例题：4KB 块、4B 地址、12 个直接项 + 一/二/三级间接</div>
+  P = 4KB / 4B = 1024。最大文件 = 12×4KB + 1024×4KB + 1024²×4KB + 1024³×4KB<br>
+  = 48KB + 4MB + 4GB + 4TB ≈ <b>4.004TB</b>。这就是 ext2/ext3 的经典寻址能力。<br>
+  若只到二级间接：48KB + 4MB + 4GB ≈ 4.004GB。</div>
+
+  <h3 class="sub">4.3.3 inode 里有什么</h3>
+  <p>inode（索引结点）保存文件元数据：文件类型、权限、所有者、大小、时间戳、链接计数、数据块指针（直接/间接）。文件名放在目录项里，目录项 = 文件名 + inode 号。这样目录很小，查找时先查目录拿 inode 号，再读 inode 拿数据块。</p>
+
+  <h2 class="sec" id="s4">4.4 空闲空间管理：哪些块还能用</h2>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>方法</th><th>做法</th><th>优点</th><th>缺点</th></tr>
+      <tr><td>空闲表</td><td>记录每个空闲区的起始块号与长度</td><td>适合连续分配</td><td>空闲区多时表很大</td></tr>
+      <tr><td>空闲链表</td><td>把空闲块用指针串成链</td><td>实现简单</td><td>分配/回收要遍历，效率低</td></tr>
+      <tr><td>位示图</td><td>每一位对应一个块，0 空闲 / 1 占用</td><td>查找连续空闲块方便，占用空间小</td><td>需要扫描位图</td></tr>
+      <tr><td>成组链接</td><td>每组最多 100 个空闲块号，组间用指针链接；超级块存第一组</td><td>适合大型文件系统，分配回收快</td><td>实现复杂，UNIX 经典方案</td></tr>
+    </table>
+  </div>
+  <div class="callout exam"><div class="co-title">📌 位示图计算（必考）</div>
+  设字长为 n 位，块号从 0 开始：<b>字号 = 块号 ÷ n</b>，<b>位号 = 块号 mod n</b>。<br>
+  若块号从 1 开始：字号 = (块号−1) ÷ n，位号 = (块号−1) mod n + 1。<br>
+  例：字长 32，块号 100（从 0 开始）→ 字号 3，位号 4。位示图大小 = 磁盘块数 ÷ 8 字节（每块 1 位）。</div>
+
+  <h2 class="sec" id="s5">4.5 文件系统布局、挂载与 VFS</h2>
+  <div class="steps">
+    <div class="step"><b>引导块。</b>分区第一个块，存放引导程序；没有引导程序也保留这一块。</div>
+    <div class="step"><b>超级块。</b>记录文件系统整体信息：块大小、inode 数量、空闲块数、空闲 inode 数、根目录位置等。</div>
+    <div class="step"><b>inode 区。</b>存放所有 inode，数量在格式化时确定，通常固定。</div>
+    <div class="step"><b>数据区。</b>真正存放文件内容的磁盘块。</div>
+  </div>
+  <p><b>挂载（mount）</b>：把一个文件系统连接到当前目录树的某个挂载点，之后通过该路径访问。Linux 的 <code class="inline">/etc/fstab</code> 描述开机挂载。<b>VFS（虚拟文件系统）</b>是内核的统一抽象层，给上层提供统一的 open/read/write 接口，下层适配 ext4、NTFS、FAT 等具体文件系统。</p>
+
+  <h2 class="sec" id="s6">4.6 磁盘：结构、地址与存取时间</h2>
+  <div class="callout life"><div class="co-title">💿 生活类比</div>
+  磁盘像一台老式唱片机：盘片一圈圈同心圆是<b>磁道</b>，磁道切成一段段<b>扇区</b>；所有盘片上半径相同的磁道组成<b>柱面</b>。读数据要先让磁头移动到目标磁道（<b>寻道</b>），再等盘片转到目标扇区（<b>旋转延迟</b>），最后读出来（<b>传输</b>）。</div>
+
+  <p><b>磁盘地址</b>通常写成（柱面号，盘面号，扇区号）。按柱面组织可以减少寻道：同一柱面的所有磁道连续编号。</p>
+  <div class="formula"><span class="fx-label">存取时间</span>
+  存取时间 = 寻道时间 + 旋转延迟 + 传输时间<br>
+  平均旋转延迟 = 旋转一圈时间 ÷ 2 = 60 ÷ (2 × 转速 rpm) 秒<br>
+  传输时间 = 数据量 ÷ 传输速率</div>
+  <p>例：7200rpm 磁盘，平均旋转延迟 = 60 / 7200 / 2 = 4.17ms；若寻道 8ms、传输 0.04ms，总存取约 12.2ms。转速越高，旋转延迟越小，但噪声/发热/成本上升。</p>
+
+  <h2 class="sec" id="s7">4.7 磁盘调度：磁头先去哪</h2>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>算法</th><th>规则</th><th>优点</th><th>缺点</th></tr>
+      <tr><td><b>FCFS</b></td><td>按请求到达顺序服务</td><td>公平、简单</td><td>磁头来回跑，移动距离大</td></tr>
+      <tr><td><b>SSTF</b> 最短寻道时间优先</td><td>每次选离当前磁头最近的请求</td><td>平均寻道时间短</td><td>远处请求可能饥饿（磁头总在局部打转）</td></tr>
+      <tr><td><b>SCAN</b> 电梯算法</td><td>沿一个方向服务到端点，再反向</td><td>兼顾距离与公平，避免饥饿</td><td>两端请求等待时间不均；到端点有无效行程</td></tr>
+      <tr><td><b>C-SCAN</b> 循环扫描</td><td>只沿一个方向服务，到端点后快速回到起点，再同方向扫</td><td>各磁道等待时间更均匀</td><td>返回行程不做服务，有额外开销</td></tr>
+      <tr><td><b>LOOK / C-LOOK</b></td><td>类似 SCAN/C-SCAN，但到最远请求就折返，不到端点</td><td>减少无效行程</td><td>实现稍复杂</td></tr>
+    </table>
+  </div>
+  <div class="callout exam"><div class="co-title">📌 例题：磁头在 53，请求 98,183,37,122,14,124,65,67</div>
+  <b>FCFS：</b>总移动 640 道。<b>SSTF：</b>53→65→67→37→14→98→122→124→183，总移动 <b>236</b> 道。<b>SCAN（向大）：</b>53→65→67→98→122→124→183→199→37→14，总移动 331 道。<br>
+  注意：SCAN 是否把「到端点 199」算进移动距离，题目会给定义；408 通常按磁头实际移动算，所以要算。<br>
+  减少旋转延迟的技巧：<b>交替编号</b>（逻辑相邻扇区物理隔开）和<b>错位命名</b>（不同盘面起始扇区错开），让读完一个扇区后下一个目标刚好转到磁头下。</div>
+
+  <h2 class="sec" id="s8">4.8 SSD：没有磁头的磁盘</h2>
+  <p>SSD 用闪存芯片存储，没有寻道和旋转延迟，随机读很快；但<b>写前要擦除</b>，擦除以块为单位，速度慢，且每个闪存块有擦写寿命。SSD 内部由 <b>FTL（闪存转换层）</b>把逻辑块地址映射到物理闪存页，并做<b>磨损均衡</b>（把写分散到不同块）、垃圾回收、坏块管理。</p>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th></th><th>机械磁盘（HDD）</th><th>固态硬盘（SSD）</th></tr>
+      <tr><td>寻道/旋转</td><td>有，随机访问慢</td><td>无，随机读快</td></tr>
+      <tr><td>写特性</td><td>可原地覆盖</td><td>写前擦除，需 FTL 映射</td></tr>
+      <tr><td>寿命</td><td>机械磨损</td><td>擦写次数有限，需磨损均衡</td></tr>
+      <tr><td>调度算法</td><td>FCFS/SSTF/SCAN 等有意义</td><td>传统磁盘调度意义不大</td></tr>
+    </table>
+  </div>
+
+  <h2 class="sec" id="deep">🚀 进阶深挖（教材级）</h2>
+  <h3 class="sub">深挖 1 · 从路径到数据：一次 open/read 的完整路径</h3>
+  <p><code class="inline">open("/home/a.txt")</code>：VFS 逐级解析路径 → 读根目录、home 目录，找到 a.txt 的目录项 → 取 inode 号 → 读 inode → 检查权限 → 在系统打开文件表建表项 → 进程 fd 表指向它。之后 <code class="inline">read(fd, buf, n)</code> 直接用 inode 的块指针定位数据块，不需要再解析路径。这就是「打开文件」的意义。</p>
+
+  <h3 class="sub">深挖 2 · 目录项、inode 与硬链接计数</h3>
+  <p>目录项只存「名字 → inode 号」，inode 里有一个 <b>链接计数</b>。创建硬链接时计数 +1，删除一个名字时计数 −1；只有计数归零才真正释放数据块和 inode。软链接是独立文件，内容是目标路径字符串，原文件删除后它仍存在，但访问会失败（悬空链接）。</p>
+
+  <h3 class="sub">深挖 3 · 成组链接怎么分配/回收</h3>
+  <p>UNIX 把空闲块分成若干组，每组最多 100 个块号。超级块中存放第一组的块号及数量；每组的第一块存放下一组的块号及数量，形成链。分配时从当前组取；取空后把下一组读入超级块。回收时若当前组未满就加入；满了就新建一组，把当前组写入新块，超级块指向新组。这样分配/回收通常只需访问超级块，效率高。</p>
+
+  <h3 class="sub">深挖 4 · 日志文件系统与一致性</h3>
+  <p>突然断电可能让 inode、位示图、目录项不一致。日志文件系统（ext3/ext4、NTFS）在真正修改前先把「要做什么」写入日志区，提交后再执行；崩溃恢复时重放或回滚日志。代价是额外写，但换来一致性。408 可能以「文件系统一致性」选择题出现。</p>
+
+  <div class="callout views"><div class="co-title">🌐 多源视角（不同教材的讲法）</div>
+  <ul>
+    <li><b>【汤小丹】文件管理 = 文件、目录、磁盘空间三件事：</b>先讲文件逻辑结构，再讲目录，再讲物理结构（分配方式），最后落到磁盘管理。本站顺序一致。</li>
+    <li><b>【王道】索引分配用「指针数 P = 块大小 / 地址大小」：</b>所有混合索引题都从 P 开始推，先算每块能放多少指针，再乘层数。不要一上来背 4TB。</li>
+    <li><b>【OSTEP】文件系统 = inode + 数据位图 + 数据块：</b>把 inode 看成「文件的元数据数组」，目录只是「名字→inode 号」的映射。与 408 的「目录项 + inode」完全对应。</li>
+  </ul>
+  <div class="src">参考：汤小丹《计算机操作系统（第四版）》第 6 章；王道《操作系统考研复习指导》第 4 章；OSTEP 第 39~41 章</div></div>
+
+  <h2 class="sec" id="lesson">🎬 动画课堂 · 第 4 集《文件的旅程》</h2>
+  <p>从文件名到目录、inode、数据块，再到磁盘调度，看一个文件怎样被找到。</p>
+  <div id="lesson-box"></div>
+
+  <h2 class="sec" id="lab1">🔬 实验室 1：磁盘调度磁头轨迹</h2>
+  <div class="lab" id="lab-disk">
+    <div class="lab-title">换算法，看磁头少跑多少道 <span class="chip">FCFS / SSTF / SCAN / C-SCAN / LOOK</span></div>
+    <div class="lab-desc">默认磁头在 53，请求队列 98,183,37,122,14,124,65,67（0~199 道）。切换算法，观察轨迹与总移动道数。</div>
+    <div class="lab-stage">
+      <div id="disk-chart"></div>
+      <div class="head-stats" id="disk-stats"></div>
+      <div id="disk-seq" class="small muted" style="margin-top:6px"></div>
+    </div>
+    <div class="lab-ctrl">
+      <label>初始磁头：<input id="disk-head" type="number" min="0" max="199" value="53"></label>
+      <label>请求队列：<input id="disk-req" class="wide" value="98,183,37,122,14,124,65,67"></label>
+      <label>算法：
+        <select id="disk-alg">
+          <option value="FCFS">FCFS</option>
+          <option value="SSTF">SSTF</option>
+          <option value="SCAN">SCAN（向大）</option>
+          <option value="CSCAN">C-SCAN（向大）</option>
+          <option value="LOOK">LOOK（向大）</option>
+          <option value="CLOOK">C-LOOK（向大）</option>
+        </select>
+      </label>
+      <button id="disk-run">重新计算</button>
+      <button id="disk-reset" class="ghost">恢复默认</button>
+    </div>
+    <div class="lab-note" id="disk-note"></div>
+  </div>
+
+  <h2 class="sec" id="lab2">🔬 实验室 2：混合索引最大文件</h2>
+  <div class="lab" id="lab-index">
+    <div class="lab-title">改块大小/地址大小/直接项，算最大文件 <span class="chip">inode 混合索引</span></div>
+    <div class="lab-desc">公式：最大文件 = (d + P + P² + P³) × 块大小，P = 块大小 ÷ 地址大小。勾选启用哪几级间接索引。</div>
+    <div class="lab-stage">
+      <div id="index-out" style="font-size:15px"></div>
+      <div id="index-bars" class="bars" style="margin-top:14px"></div>
+    </div>
+    <div class="lab-ctrl">
+      <label>块大小：
+        <select id="ix-block">
+          <option value="1">1 KB</option>
+          <option value="2">2 KB</option>
+          <option value="4" selected>4 KB</option>
+          <option value="8">8 KB</option>
+        </select>
+      </label>
+      <label>地址大小：
+        <select id="ix-addr">
+          <option value="4" selected>4 B</option>
+          <option value="8">8 B</option>
+        </select>
+      </label>
+      <label>直接项：<input id="ix-direct" type="number" min="0" max="32" value="12"></label>
+      <label><input id="ix-single" type="checkbox" checked> 一级间接</label>
+      <label><input id="ix-double" type="checkbox" checked> 二级间接</label>
+      <label><input id="ix-triple" type="checkbox" checked> 三级间接</label>
+      <button id="ix-run">计算</button>
+      <button id="ix-reset" class="ghost">恢复默认</button>
+    </div>
+    <div class="lab-note" id="ix-note"></div>
+  </div>
+
+  <h2 class="sec" id="pit">⚠️ 本章避坑清单</h2>
+  <div class="steps plain">
+    <div class="step">逻辑结构是文件内部记录的组织，物理结构是文件在磁盘上的分配，别混。</div>
+    <div class="step">目录项存「文件名 + inode 号」，文件属性在 inode 里；目录本身也是文件。</div>
+    <div class="step">硬链接共享 inode，删除原文件不丢数据；软链接存路径，原文件删了就悬空。</div>
+    <div class="step">连续分配有外部碎片；链接分配无外部碎片但隐式链接只能顺序访问。</div>
+    <div class="step">FAT 表项数 = 磁盘块数，不是文件数；FAT 大小 = 块数 × 表项大小。</div>
+    <div class="step">混合索引先算 P = 块大小 / 地址大小，再乘层数；直接项也要算。</div>
+    <div class="step">位示图注意块号从 0 还是从 1 开始，公式差 1。</div>
+    <div class="step">磁盘存取时间三项都要算；平均旋转延迟是半圈，不是一圈。</div>
+    <div class="step">SCAN 到端点是否算移动距离，看题目定义；408 通常算实际移动。</div>
+  </div>
+
+  <h2 class="sec" id="quiz">📝 章内练习（16 题 · 基础 → 提高 → 真题改编）</h2>
+
+  <h3 class="sub" style="color:var(--green)">🟢 第一档 · 基础（4 题）</h3>
+
+  <div class="quiz" data-answer="B" data-diff="basic">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl basic">基础</span>练习 1 · 考点：逻辑结构 vs 物理结构</div>
+    文件的逻辑结构指的是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 文件在磁盘上占用哪些块</div>
+      <div class="opt" data-opt="B">B. 文件内部记录的组织方式，是用户看到的结构</div>
+      <div class="opt" data-opt="C">C. 目录的层级关系</div>
+      <div class="opt" data-opt="D">D. 文件的权限位</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 B。逻辑结构面向用户，如无结构流、顺序文件、索引文件；物理结构面向磁盘，如连续、链接、索引分配。A 是物理结构；C 是目录结构；D 是保护机制。</div>
+  </div>
+
+  <div class="quiz" data-answer="C" data-diff="basic">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl basic">基础</span>练习 2 · 考点：目录项与 inode</div>
+    在 UNIX 风格文件系统中，目录项通常存放的是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 文件的全部数据</div>
+      <div class="opt" data-opt="B">B. 文件的权限、大小、时间戳</div>
+      <div class="opt" data-opt="C">C. 文件名和该文件的 inode 号</div>
+      <div class="opt" data-opt="D">D. 文件的磁盘块号列表</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 C。目录项是「名字 → inode 号」的映射；权限、大小、时间戳、块指针都在 inode 里。这样目录可以很小，查找时先查目录拿 inode 号，再读 inode。A、D 是数据区/inode 的内容；B 是 inode 的元数据。</div>
+  </div>
+
+  <div class="quiz" data-answer="A" data-diff="basic">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl basic">基础</span>练习 3 · 考点：硬链接</div>
+    给文件创建一个硬链接后，再删除原文件名，会发生什么？</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 数据仍在，硬链接仍可访问</div>
+      <div class="opt" data-opt="B">B. 数据立即被删除，硬链接悬空</div>
+      <div class="opt" data-opt="C">C. inode 立即被释放</div>
+      <div class="opt" data-opt="D">D. 硬链接自动变成软链接</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 A。硬链接与原文件名共享同一个 inode，inode 有链接计数；删除一个名字只是计数减 1，只有计数归零才释放数据块和 inode。B、C 是软链接或计数归零后的行为；D 不会自动转换。</div>
+  </div>
+
+  <div class="quiz" data-answer="D" data-diff="basic">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl basic">基础</span>练习 4 · 考点：FAT 表项数</div>
+    某磁盘有 2²⁰ 个磁盘块，采用 FAT 文件系统，每个 FAT 表项 4B。FAT 的大小是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 1MB</div>
+      <div class="opt" data-opt="B">B. 2MB</div>
+      <div class="opt" data-opt="C">C. 4MB</div>
+      <div class="opt" data-opt="D">D. 8MB</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 C。FAT 表项数 = 磁盘块数 = 2²⁰ = 1M；每项 4B，总大小 = 2²⁰ × 4B = 4MB。注意不是按文件数算，而是按磁盘块数算。</div>
+  </div>
+
+  <h3 class="sub" style="color:var(--accent)">🟡 第二档 · 提高（4 题）</h3>
+
+  <div class="quiz" data-answer="B" data-diff="mid">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl mid">提高</span>练习 5 · 考点：连续分配</div>
+    连续分配的突出优点是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 文件可以随时动态增长，不会产生碎片</div>
+      <div class="opt" data-opt="B">B. 顺序访问和随机访问都很快，寻道次数少</div>
+      <div class="opt" data-opt="C">C. 不需要知道文件大小</div>
+      <div class="opt" data-opt="D">D. 适合频繁插入/删除的文件</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 B。连续分配把文件放在一段连续块里，磁头寻道少，顺序/随机访问都快。A 错，连续分配扩展困难且会产生外部碎片；C 错，必须预知大小；D 错，插入/删除要移动数据。</div>
+  </div>
+
+  <div class="quiz" data-answer="C" data-diff="mid">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl mid">提高</span>练习 6 · 考点：显式链接 FAT</div>
+    与隐式链接分配相比，显式链接（FAT）的主要优点是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 不需要索引块</div>
+      <div class="opt" data-opt="B">B. 不占用内存</div>
+      <div class="opt" data-opt="C">C. 支持随机访问，因为 FAT 常驻内存，可沿表项跳转</div>
+      <div class="opt" data-opt="D">D. 不会产生外部碎片</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 C。隐式链接的下一块指针在数据块里，只能顺序读；FAT 把所有下一块指针集中到内存表，可以沿表项跳转，实现随机访问。A 两者都不需要索引块；B 错，FAT 占内存；D 两者都无外部碎片，不是区别。</div>
+  </div>
+
+  <div class="quiz" data-answer="A" data-diff="mid">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl mid">提高</span>练习 7 · 考点：混合索引容量</div>
+    块大小 1KB，地址 4B，inode 有 10 个直接项、1 个一级间接、1 个二级间接。最大文件大小约为：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 64.26MB</div>
+      <div class="opt" data-opt="B">B. 64MB</div>
+      <div class="opt" data-opt="C">C. 16MB</div>
+      <div class="opt" data-opt="D">D. 4GB</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 A。P = 1KB / 4B = 256。直接：10×1KB = 10KB；一级：256×1KB = 256KB；二级：256²×1KB = 65536KB = 64MB。合计 64MB + 266KB ≈ <b>64.26MB</b>。B 漏了直接项和一级项；C 只算了二级的一部分；D 需要三级间接。</div>
+  </div>
+
+  <div class="quiz" data-answer="B" data-diff="mid">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl mid">提高</span>练习 8 · 考点：位示图</div>
+    字长 32 位，块号从 0 开始，块号 100 在位示图中的字号和位号是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 3 和 5</div>
+      <div class="opt" data-opt="B">B. 3 和 4</div>
+      <div class="opt" data-opt="C">C. 4 和 3</div>
+      <div class="opt" data-opt="D">D. 4 和 4</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 B。字号 = 100 ÷ 32 = 3（0 开始），位号 = 100 mod 32 = 4。若块号从 1 开始，则是字号 (100−1)/32=3、位号 (100−1)%32+1=4，结果相同但推导不同。考试先确认块号起点。</div>
+  </div>
+
+  <h3 class="sub" style="color:var(--brand)">🔴 第三档 · 真题改编（8 题 · 题型对标）</h3>
+
+  <div class="quiz" data-answer="C" data-diff="real" data-year="2013">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2013 题型</span>练习 9 · 考点：软链接</div>
+    关于软链接（符号链接），下列说法正确的是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 与原文件共享同一个 inode</div>
+      <div class="opt" data-opt="B">B. 删除原文件后，软链接仍然指向有效数据</div>
+      <div class="opt" data-opt="C">C. 是一个独立文件，内容是目标文件的路径；原文件删除后访问会失败</div>
+      <div class="opt" data-opt="D">D. 不能跨文件系统</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 C。软链接有自己的 inode，内容是目标路径字符串，访问时需要再解析路径。原文件删除后链接悬空。A 是硬链接；B 错；D 错，软链接可以跨文件系统，硬链接不行。</div>
+  </div>
+
+  <div class="quiz" data-answer="B" data-diff="real" data-year="2015">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2015 题型</span>练习 10 · 考点：磁盘地址</div>
+    磁盘地址通常由哪些部分组成？</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 文件名、inode 号、偏移</div>
+      <div class="opt" data-opt="B">B. 柱面号、盘面号、扇区号</div>
+      <div class="opt" data-opt="C">C. 页号、页内偏移</div>
+      <div class="opt" data-opt="D">D. 块号、位号</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 B。磁盘物理地址 =（柱面号，盘面号，扇区号）。柱面号定位磁道组，盘面号选盘片/磁头，扇区号定位扇区。A 是文件访问路径；C 是分页地址；D 是位示图坐标。</div>
+  </div>
+
+  <div class="quiz" data-answer="C" data-diff="real" data-year="2017">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2017 题型</span>练习 11 · 考点：平均旋转延迟</div>
+    某磁盘转速 7200 转/分，平均旋转延迟约为：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 8.33ms</div>
+      <div class="opt" data-opt="B">B. 2.08ms</div>
+      <div class="opt" data-opt="C">C. 4.17ms</div>
+      <div class="opt" data-opt="D">D. 16.67ms</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 C。转一圈时间 = 60s / 7200 = 8.33ms；平均旋转延迟取半圈 = 4.17ms。A 是一圈时间；B 是四分之一圈；D 是两圈。公式：平均旋转延迟 = 60 / (2 × rpm) 秒。</div>
+  </div>
+
+  <div class="quiz" data-answer="B" data-diff="real" data-year="2019">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2019 题型</span>练习 12 · 考点：SSTF 总移动</div>
+    磁头初始在 53 道，请求队列 98,183,37,122,14,124,65,67。采用 SSTF，总移动道数是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 640</div>
+      <div class="opt" data-opt="B">B. 236</div>
+      <div class="opt" data-opt="C">C. 331</div>
+      <div class="opt" data-opt="D">D. 359</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 B。SSTF 顺序：53→65(12)→67(2)→37(30)→14(23)→98(84)→122(24)→124(2)→183(59)，总移动 12+2+30+23+84+24+2+59 = <b>236</b>。A 是 FCFS；C 是 SCAN（向大）；D 是 C-SCAN。</div>
+  </div>
+
+  <div class="quiz" data-answer="D" data-diff="real" data-year="2012">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2012 题型</span>练习 13 · 考点：SCAN vs C-SCAN</div>
+    与 SCAN 相比，C-SCAN 的主要特点是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 磁头来回双向服务，公平性最好</div>
+      <div class="opt" data-opt="B">B. 总是选择最近的请求，平均寻道最短</div>
+      <div class="opt" data-opt="C">C. 不需要知道磁头当前方向</div>
+      <div class="opt" data-opt="D">D. 只沿一个方向服务，到端点后快速返回起点，再同方向扫描，等待时间更均匀</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 D。C-SCAN 单向服务，返回时快速移动不服务，避免 SCAN 两端等待不均。A 是 SCAN；B 是 SSTF；C 错，C-SCAN 必须知道方向。</div>
+  </div>
+
+  <div class="quiz" data-answer="A" data-diff="real" data-year="2016">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2016 题型</span>练习 14 · 考点：SSTF 饥饿</div>
+    SSTF 可能出现的问题是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 远处请求长期得不到服务（饥饿）</div>
+      <div class="opt" data-opt="B">B. 磁头移动距离总是最大</div>
+      <div class="opt" data-opt="C">C. 完全随机服务，无法预测</div>
+      <div class="opt" data-opt="D">D. 只能用于 SSD</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 A。SSTF 每次选最近的请求，如果新请求不断出现在磁头附近，远处的请求可能永远排不上，形成饥饿。SCAN/C-SCAN 通过强制移动方向避免饥饿。B 错，SSTF 平均移动通常较小；C 错，它有明确规则；D 错，SSTF 用于机械磁盘。</div>
+  </div>
+
+  <div class="quiz" data-answer="C" data-diff="real" data-year="2014">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2014 题型</span>练习 15 · 考点：交替编号</div>
+    磁盘采用交替编号（interleaving）的主要目的是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 增加磁盘容量</div>
+      <div class="opt" data-opt="B">B. 减少寻道时间</div>
+      <div class="opt" data-opt="C">C. 减少旋转延迟，让下一个逻辑扇区在需要时刚好转到磁头下</div>
+      <div class="opt" data-opt="D">D. 提高磁盘转速</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 C。CPU/控制器读完一个扇区需要时间，若逻辑相邻扇区物理也相邻，等下次读时它已经转过去了，要再等一圈。交替编号把逻辑相邻扇区物理隔开，读完一个后下一个刚好转到位，减少旋转延迟。它不增加容量、不减少寻道、不改变转速。</div>
+  </div>
+
+  <div class="quiz" data-answer="B" data-diff="real" data-year="2022">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2022 题型</span>练习 16 · 考点：SSD</div>
+    关于 SSD，下列说法正确的是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. SSD 的随机读需要寻道，因此比 HDD 慢</div>
+      <div class="opt" data-opt="B">B. SSD 写前需要擦除，FTL 负责逻辑块到物理页的映射与磨损均衡</div>
+      <div class="opt" data-opt="C">C. SSD 不需要垃圾回收</div>
+      <div class="opt" data-opt="D">D. 传统磁盘调度算法对 SSD 仍然最重要</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 B。SSD 没有磁头，随机读很快；闪存写前要擦除（以块为单位），FTL 做地址映射、磨损均衡、垃圾回收。A 错；C 错，垃圾回收是 SSD 必需；D 错，SSD 无寻道/旋转，传统调度意义不大。</div>
+  </div>
+
+  <h2 class="sec" id="ck">✅ 本章打卡清单 <span class="progress-pill">0 / 6 已打卡</span></h2>
+  <div class="checklist" data-ck-scope>
+    <label class="check-item" data-ck="ch04-1"><input type="checkbox"><span>能说清文件逻辑结构与物理结构的区别，列举四种目录结构</span></label>
+    <label class="check-item" data-ck="ch04-2"><input type="checkbox"><span>能区分硬链接与软链接，知道删除文件时 inode/链接计数的变化</span></label>
+    <label class="check-item" data-ck="ch04-3"><input type="checkbox"><span>能比较连续/链接/索引分配，算 FAT 大小</span></label>
+    <label class="check-item" data-ck="ch04-4"><input type="checkbox"><span>能用混合索引算最大文件大小，用位示图算字号/位号</span></label>
+    <label class="check-item" data-ck="ch04-5"><input type="checkbox"><span>能手推 FCFS/SSTF/SCAN/C-SCAN 的磁头移动与总道数</span></label>
+    <label class="check-item" data-ck="ch04-6"><input type="checkbox"><span>完成章内 16 题，错题能说出错因并收藏/重做</span></label>
+  </div>
+
+  <p class="center" style="margin-top:28px"><a class="btn" href="ch05.html">下一章：I/O 管理 →</a></p>
+</div>
+
+<footer>
+  408 操作系统可视化课堂 · 第 4 章<br>
+  <div class="pagers"><a href="ch03.html">上一章</a><a href="index.html">总览</a><a href="ch05.html">下一章</a></div>
+</footer>
+
+<script src="assets/app.js"></script>
+<script src="assets/lesson-ch04.js"></script>
+<script src="assets/lesson-player.js"></script>
+<script>
+/* 实验室 1：磁盘调度 */
+(function () {
+  var reqEl = document.getElementById("disk-req");
+  var headEl = document.getElementById("disk-head");
+  var algEl = document.getElementById("disk-alg");
+  var chart = document.getElementById("disk-chart");
+  var stats = document.getElementById("disk-stats");
+  var seqEl = document.getElementById("disk-seq");
+  var noteEl = document.getElementById("disk-note");
+  if (!chart) return;
+
+  function parseReq(s) {
+    return s.split(/[,\s，]+/).map(function (x) { return parseInt(x, 10); }).filter(function (x) { return !isNaN(x) && x >= 0 && x <= 199; });
+  }
+  function sortAsc(a) { return a.slice().sort(function (x, y) { return x - y; }); }
+  function build(alg, head, reqs) {
+    var seq = [head], rem = reqs.slice(), cur = head;
+    if (alg === "FCFS") { seq = [head].concat(reqs.slice()); return seq; }
+    if (alg === "SSTF") {
+      while (rem.length) {
+        var best = 0;
+        for (var i = 1; i < rem.length; i++) if (Math.abs(rem[i] - cur) < Math.abs(rem[best] - cur)) best = i;
+        cur = rem.splice(best, 1)[0]; seq.push(cur);
+      }
+      return seq;
+    }
+    var up = sortAsc(reqs.filter(function (x) { return x >= head; }));
+    var down = sortAsc(reqs.filter(function (x) { return x < head; })).reverse();
+    if (alg === "SCAN") return [head].concat(up, up.length && up[up.length - 1] === 199 ? [] : [199], down);
+    if (alg === "CSCAN") return [head].concat(up, up.length && up[up.length - 1] === 199 ? [] : [199], [0], sortAsc(reqs.filter(function (x) { return x < head; })));
+    if (alg === "LOOK") return [head].concat(up, down);
+    if (alg === "CLOOK") {
+      var low = sortAsc(reqs.filter(function (x) { return x < head; }));
+      return [head].concat(up, low);
+    }
+    return seq;
+  }
+  function totalOf(seq) {
+    var t = 0;
+    for (var i = 1; i < seq.length; i++) t += Math.abs(seq[i] - seq[i - 1]);
+    return t;
+  }
+  function render() {
+    var head = Math.max(0, Math.min(199, parseInt(headEl.value, 10) || 53));
+    var reqs = parseReq(reqEl.value);
+    var alg = algEl.value;
+    var seq = build(alg, head, reqs);
+    var total = totalOf(seq);
+    var W = 780, H = 300, L = 40, R = 760, T = 25, B = 260;
+    var x = function (v) { return L + v / 199 * (R - L); };
+    var y = function (i) { return T + (seq.length === 1 ? 0 : i / (seq.length - 1)) * (B - T); };
+    var svg = '<svg viewBox="0 0 800 300" width="100%" class="head-path">';
+    [0, 50, 100, 150, 199].forEach(function (v) {
+      svg += '<line x1="' + x(v) + '" y1="' + T + '" x2="' + x(v) + '" y2="' + B + '" class="ls-line"/>';
+      svg += '<text x="' + x(v) + '" y="' + (B + 22) + '" text-anchor="middle" class="ls-t xs">' + v + "</text>";
+    });
+    var pts = seq.map(function (v, i) { return x(v) + "," + y(i); }).join(" ");
+    svg += '<polyline points="' + pts + '" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linejoin="round"/>';
+    seq.forEach(function (v, i) {
+      var first = i === 0;
+      svg += '<circle cx="' + x(v) + '" cy="' + y(i) + '" r="' + (first ? 6 : 4) + '" fill="' + (first ? "var(--accent)" : "var(--brand)") + '"/>';
+      if (seq.length <= 12 || first || i === seq.length - 1) {
+        svg += '<text x="' + x(v) + '" y="' + (y(i) - 9) + '" text-anchor="middle" class="ls-t xs">' + v + "</text>";
+      }
+    });
+    svg += '<text x="' + L + '" y="18" class="ls-t xs">起点 ' + head + "</text>";
+    svg += "</svg>";
+    chart.innerHTML = svg;
+    stats.innerHTML = "<span>算法 <b>" + alg + "</b></span><span>总移动 <b>" + total + "</b> 道</span><span>服务序列 <b>" + seq.length + "</b> 个位置</span>";
+    seqEl.textContent = "轨迹：" + seq.join(" → ");
+    noteEl.innerHTML = "起点 <b>" + head + "</b>，请求 " + reqs.length + " 个。当前总移动 <b>" + total + "</b> 道。";
+  }
+  document.getElementById("disk-run").addEventListener("click", render);
+  algEl.addEventListener("change", render);
+  headEl.addEventListener("change", render);
+  document.getElementById("disk-reset").addEventListener("click", function () {
+    headEl.value = 53; reqEl.value = "98,183,37,122,14,124,65,67"; algEl.value = "FCFS"; render();
+  });
+  render();
+})();
+
+/* 实验室 2：混合索引容量 */
+(function () {
+  var out = document.getElementById("index-out");
+  var bars = document.getElementById("index-bars");
+  var note = document.getElementById("ix-note");
+  if (!out) return;
+  function fmt(n) {
+    if (n >= 1024 * 1024 * 1024 * 1024) return (n / (1024 * 1024 * 1024 * 1024)).toFixed(3) + " TB";
+    if (n >= 1024 * 1024 * 1024) return (n / (1024 * 1024 * 1024)).toFixed(3) + " GB";
+    if (n >= 1024 * 1024) return (n / (1024 * 1024)).toFixed(3) + " MB";
+    if (n >= 1024) return (n / 1024).toFixed(3) + " KB";
+    return n + " B";
+  }
+  function render() {
+    var block = parseInt(document.getElementById("ix-block").value, 10) * 1024;
+    var addr = parseInt(document.getElementById("ix-addr").value, 10);
+    var d = Math.max(0, parseInt(document.getElementById("ix-direct").value, 10) || 0);
+    var p = Math.floor(block / addr);
+    var s = document.getElementById("ix-single").checked ? 1 : 0;
+    var dbl = document.getElementById("ix-double").checked ? 1 : 0;
+    var tri = document.getElementById("ix-triple").checked ? 1 : 0;
+    var parts = [
+      { name: "直接项 " + d + " 个", bytes: d * block, color: "#0f766e" },
+      { name: "一级间接", bytes: s * p * block, color: "#14b8a6" },
+      { name: "二级间接", bytes: dbl * p * p * block, color: "#d97706" },
+      { name: "三级间接", bytes: tri * p * p * p * block, color: "#6d28d9" }
+    ];
+    var total = parts.reduce(function (a, x) { return a + x.bytes; }, 0);
+    out.innerHTML = "每块可存指针 <b>P = " + block + "B ÷ " + addr + "B = " + p + "</b>；最大文件 = <b>" + fmt(total) + "</b>（" + total.toLocaleString() + " 字节）";
+    var max = Math.max.apply(null, parts.map(function (x) { return x.bytes; })) || 1;
+    bars.innerHTML = parts.map(function (x) {
+      var w = x.bytes / max * 100;
+      return '<div class="bar-row"><span class="b-label">' + x.name + '</span><div class="bar-track"><div class="bar-fill" style="width:' + w + '%;background:' + x.color + '"></div></div><span class="b-val">' + fmt(x.bytes) + "</span></div>";
+    }).join("");
+    note.innerHTML = "注意：勾选三级间接后总容量通常由最高级间接项主导；直接项和低阶间接项在总容量里几乎可以忽略，但计算题必须全部加上。";
+  }
+  document.getElementById("ix-run").addEventListener("click", render);
+  ["ix-block", "ix-addr", "ix-single", "ix-double", "ix-triple"].forEach(function (id) {
+    document.getElementById(id).addEventListener("change", render);
+  });
+  document.getElementById("ix-direct").addEventListener("change", render);
+  document.getElementById("ix-reset").addEventListener("click", function () {
+    document.getElementById("ix-block").value = "4";
+    document.getElementById("ix-addr").value = "4";
+    document.getElementById("ix-direct").value = 12;
+    document.getElementById("ix-single").checked = true;
+    document.getElementById("ix-double").checked = true;
+    document.getElementById("ix-triple").checked = true;
+    render();
+  });
+  render();
+})();
+</script>
+</body>
+</html>

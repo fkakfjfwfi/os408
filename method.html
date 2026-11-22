@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>备考方法论 · 408 操作系统可视化课堂</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<nav class="topbar"><div class="topbar-inner">
+  <a class="logo" href="index.html"><span class="dot"></span>408 操作系统可视化课堂</a>
+  <div class="nav-links">
+    <a href="index.html">总览</a><a href="ch01.html">系统概述</a><a href="ch02.html">进程与线程</a><a href="ch03.html">内存管理</a><a href="ch04.html">文件管理</a><a href="ch05.html">I/O 管理</a><a href="practice.html">练习场</a><a href="method.html">备考方法论</a><a href="resources.html">资源导航</a>
+  </div>
+  <button class="theme-btn" title="切换明暗主题">🌙</button>
+</div></nav>
+
+<div class="wrap">
+  <div class="hero">
+    <h1>备考方法论 · 操作系统 35 分怎么拿</h1>
+    <p>零基础最怕的不是难，是「不知道先学什么、学到什么程度、怎么判断自己会了」。这一页把 408 操作系统的分值、三轮节奏、六类计算题模板、PV 大题套路、错题本写法全部拆成可执行动作。</p>
+    <p class="tagline">先看战场 → 再排三轮 → 再练模板 → 最后管住错题</p>
+  </div>
+
+  <div class="toc"><span class="toc-label">本页导航</span><a href="#battle">看清战场</a><a href="#rounds">三轮规划</a><a href="#start">零基础起步</a><a href="#calc">六类计算模板</a><a href="#pv">PV 大题四步法</a><a href="#wrong">错题本</a><a href="#real">真题两遍法</a><a href="#memory">精确记忆清单</a><a href="#giveup">弃疗点对策</a><a href="#exam">考场策略</a><a href="#daily">每日节奏</a></div>
+
+  <h2 class="sec" id="battle">1. 先看清战场：35 分从哪来</h2>
+  <p>408 计算机学科专业基础综合总分 150：数据结构 45、计算机组成原理 45、操作系统 35、计算机网络 25。操作系统不是「小学科」，它的 35 分里有大量稳定计算题，投入产出比很高。</p>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>题型</th><th>大致分值</th><th>考什么</th><th>拿分策略</th></tr>
+      <tr><td>单项选择题</td><td>约 20 分（约 10 题）</td><td>概念辨析、状态转换、调度/置换算法、I/O 方式、文件分配</td><td>概念题不丢，计算题套模板；不会的先排除明显错误项</td></tr>
+      <tr><td>综合应用题</td><td>约 15 分（2 题，常见 7+8）</td><td>PV 同步、死锁/银行家、页表与地址转换、页面置换、磁盘调度、文件索引</td><td>先写公式和步骤，再算结果；步骤分往往比结果分多</td></tr>
+    </table>
+  </div>
+  <p class="muted small">注：每年题型分布略有浮动，以上为近年常见结构，用于安排复习权重，不要当成绝对数字。</p>
+
+  <h3 class="sub">近十年高频考点（按出现频率排）</h3>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>梯队</th><th>考点</th><th>常见题型</th><th>对应章节</th></tr>
+      <tr><td>第一梯队（几乎每年）</td><td>进程状态与转换、调度算法计算、PV 同步互斥、死锁/银行家</td><td>选择 + 大题</td><td><a href="ch02.html">第 2 章</a></td></tr>
+      <tr><td>第一梯队</td><td>分页地址转换、页表大小、页面置换与缺页率、虚拟内存</td><td>选择 + 大题</td><td><a href="ch03.html">第 3 章</a></td></tr>
+      <tr><td>第二梯队（高频）</td><td>文件索引/混合索引、目录与硬软链接、磁盘调度、存取时间</td><td>选择 + 大题</td><td><a href="ch04.html">第 4 章</a></td></tr>
+      <tr><td>第二梯队</td><td>中断与系统调用、内核态/用户态、I/O 方式、缓冲、SPOOLing</td><td>选择题为主</td><td><a href="ch01.html">第 1 章</a> / <a href="ch05.html">第 5 章</a></td></tr>
+      <tr><td>第三梯队（轮换）</td><td>多级页表、TLB/EAT、分段/段页式、FAT、位示图、SSD</td><td>选择 + 小计算</td><td>第 3~5 章</td></tr>
+    </table>
+  </div>
+  <div class="callout exam"><div class="co-title">📌 复习权重的结论</div>
+  <b>第 2 章（进程）和第 3 章（内存）必须吃透</b>，它们贡献了 OS 大题的大部分；第 4 章的计算题性价比最高；第 1、5 章以选择题为主，概念要准但不必钻太深。不要把时间平均分给五章。</div>
+
+  <h2 class="sec" id="rounds">2. 三轮规划：每轮只做一件事</h2>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>轮次</th><th>周期（可按自己进度缩放）</th><th>核心任务</th><th>完成标准</th></tr>
+      <tr><td><b>第一轮 · 基础</b></td><td>6~8 周</td><td>按 01→05 过一遍教材/网课，理解概念，做章内基础题</td><td>能用自己的话解释每个机制；五状态、分页、PV、三种文件分配能画出来</td></tr>
+      <tr><td><b>第二轮 · 强化</b></td><td>4~5 周</td><td>按题型专题突破：调度计算、页面置换、地址转换、文件索引、PV、银行家</td><td>六类计算题能在 10 分钟内独立算对；PV 大题能写出完整伪代码</td></tr>
+      <tr><td><b>第三轮 · 冲刺</b></td><td>3 周</td><td>真题套卷限时、错题重做、精确记忆清单背诵</td><td>真题选择正确率 ≥ 80%；错题本里的题二次正确率 ≥ 90%</td></tr>
+    </table>
+  </div>
+
+  <h3 class="sub">第一轮每周动作（模板）</h3>
+  <div class="steps">
+    <div class="step"><b>看动画 + 读本章。</b>先看本站动画课堂建立全局图景，再读章节详解；不要一上来抠细节。</div>
+    <div class="step"><b>手画一张图。</b>每章至少画一张：五状态图、分页地址转换图、文件分配对比图、I/O 层次图。画不出来 = 没学会。</div>
+    <div class="step"><b>做 16 题。</b>先做基础 4 题，再做提高 4 题；真题改编 8 题可以留到第二轮。错题按下面的三栏法记录。</div>
+    <div class="step"><b>周末复盘 30 分钟。</b>只看错题和打卡清单，不重读全书。能讲给自己听一遍才算过。</div>
+  </div>
+
+  <h3 class="sub">第二轮专题顺序（建议）</h3>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>顺序</th><th>专题</th><th>练什么</th><th>目标</th></tr>
+      <tr><td>1</td><td>调度计算</td><td>FCFS/SJF/SRTN/HRRN/RR 的甘特图与周转</td><td>任何一组进程，5 分钟内画出时间轴并算平均周转</td></tr>
+      <tr><td>2</td><td>PV 同步</td><td>生产者-消费者、读者-写者、前趋关系</td><td>看到场景能列出信号量初值并写完整代码</td></tr>
+      <tr><td>3</td><td>死锁</td><td>四条件、银行家安全序列、资源分配图化简</td><td>能判断安全/不安全，能求出至少一个安全序列</td></tr>
+      <tr><td>4</td><td>地址与页表</td><td>页号/偏移、页表项数、多级页表、TLB/EAT</td><td>看到地址位数和页大小就能推出各级位数</td></tr>
+      <tr><td>5</td><td>页面置换</td><td>FIFO/LRU/OPT/CLOCK 逐列推</td><td>表格法算缺页次数，能解释 Belady</td></tr>
+      <tr><td>6</td><td>文件与磁盘</td><td>混合索引容量、位示图、磁盘调度、存取时间</td><td>公式熟练，单位换算不出错</td></tr>
+      <tr><td>7</td><td>I/O 与缓冲</td><td>四种 I/O 方式、单/双缓冲、SPOOLing</td><td>概念辨析全对，缓冲公式不混</td></tr>
+    </table>
+  </div>
+
+  <h3 class="sub">第三轮每周动作</h3>
+  <p><b>周一~周三：</b>一套真题（只做 OS 部分 + 对答案），把错题按章节归类。<b>周四~周五：</b>回对应章节补概念，重做错题。<b>周六：</b>限时做一套完整 408（至少 OS 部分限时）。<b>周日：</b>背精确记忆清单 + 休息。不要连续七天高强度，大脑需要 consolidation。</p>
+
+  <h2 class="sec" id="start">3. 零基础第一轮怎么读</h2>
+  <div class="callout life"><div class="co-title">🧭 别从「定义」开始背</div>
+  操作系统是「设计出来的」，不是「发现出来的」。每学一个机制，先问三个问题：<b>它解决什么问题？没有它会怎样？它的代价是什么？</b>比如虚拟内存：解决内存不够；没有它大程序跑不了；代价是缺页与地址转换开销。答出这三问，概念就活了。</div>
+  <div class="grid cols-2">
+    <div class="card"><h3>推荐顺序</h3><p>第 1 章（地图）→ 第 2 章（进程，核心）→ 第 3 章（内存，核心）→ 第 4 章（文件）→ 第 5 章（I/O）。不要先啃第 5 章，概念碎且依赖前面。</p></div>
+    <div class="card"><h3>每节最小闭环</h3><p>读一段 → 合上书用自己的话复述 → 画一张草图 → 做 2 道题。只读不做 = 假学习；只做不读 = 背题。</p></div>
+  </div>
+
+  <h2 class="sec" id="calc">4. 六类计算题模板（考场直接套）</h2>
+
+  <h3 class="sub">模板 1 · 调度：周转与带权周转</h3>
+  <div class="steps">
+    <div class="step">画时间轴，按算法规则填每个进程的开始/完成时间。</div>
+    <div class="step">周转 T = 完成 − 到达；带权 W = T ÷ 服务时间。</div>
+    <div class="step">求平均：分别求和 ÷ 进程数；注意单位（ms）和保留小数。</div>
+  </div>
+  <div class="callout warn"><div class="co-title">⚠️ 常见错</div>
+  忘记「到达时间」导致周转算成服务时间；RR 忘记新进程在时间片结束时入队；SJF 在「当前时刻」只比较已到达的进程。</div>
+
+  <h3 class="sub">模板 2 · 页面置换：缺页次数与缺页率</h3>
+  <div class="steps">
+    <div class="step">画表格：列 = 引用串的每一次访问，行 = 每个页框。</div>
+    <div class="step">逐列填：命中就照抄，缺页就按算法换页；在列头标「命中/缺页」。</div>
+    <div class="step">缺页率 = 缺页次数 ÷ 总访问次数；OPT 需要看「未来最晚使用」，LRU 看「过去最久未使用」。</div>
+  </div>
+
+  <h3 class="sub">模板 3 · 地址转换与页表大小</h3>
+  <div class="steps">
+    <div class="step">页内偏移位数 = log₂(页大小)；页号位数 = 逻辑地址位数 − 偏移位数。</div>
+    <div class="step">页表项数 = 2^页号位数；页表大小 = 项数 × 每项字节数。</div>
+    <div class="step">物理地址 = 页框号 × 页大小 + 页内偏移；多级页表把页号按「每页可容纳的页表项数」拆位。</div>
+  </div>
+  <div class="callout exam"><div class="co-title">📌 多级页表速算</div>
+  4KB 页、4B 项 → 每页 1024 项（10 位）；32 位地址 → 20 位页号 → 10+10 两级；48 位地址、8B 项 → 每页 512 项（9 位）→ 36 位页号 → 9+9+9+9 四级。</div>
+
+  <h3 class="sub">模板 4 · 磁盘调度与存取时间</h3>
+  <div class="steps">
+    <div class="step">写出服务顺序（SSTF 每次找最近；SCAN 先同向到端点再反向）。</div>
+    <div class="step">总移动 = 相邻磁道号差的绝对值之和；注意是否把到端点/返回 0 的行程算入。</div>
+    <div class="step">存取时间 = 寻道 + 平均旋转延迟 + 传输；平均旋转延迟 = 60/(2×rpm) 秒。</div>
+  </div>
+
+  <h3 class="sub">模板 5 · 文件索引与位示图</h3>
+  <div class="steps">
+    <div class="step">每块指针数 P = 块大小 ÷ 地址大小。</div>
+    <div class="step">最大文件 = 直接项×块 + P×块 + P²×块 + P³×块（按题目启用的级数算）。</div>
+    <div class="step">位示图：字号 = 块号 ÷ 字长，位号 = 块号 mod 字长；注意块号从 0 还是 1 开始。</div>
+  </div>
+
+  <h3 class="sub">模板 6 · 缓冲与 I/O 时间</h3>
+  <div class="steps">
+    <div class="step">单缓冲每块 = max(C,T) + M；双缓冲每块 = max(C+M,T)。</div>
+    <div class="step">N 块总时间 = N × 每块时间（按题目是否给初始填充调整）。</div>
+    <div class="step">中断次数 = 数据量 ÷ 每次中断传输量；DMA 中断次数 = 数据量 ÷ 每块大小。</div>
+  </div>
+
+  <h2 class="sec" id="pv">5. PV 大题四步法（408 最高频大题）</h2>
+  <div class="steps">
+    <div class="step"><b>找角色。</b>把题目里的「谁」列成进程：生产者/消费者、读者/写者、司机/售票员、爸爸/儿子/女儿。每个角色一个 while(true) 循环。</div>
+    <div class="step"><b>找资源与约束。</b>缓冲区容量 → empty/full；共享变量 → mutex；谁必须先于谁 → 同步信号量初值 0。</div>
+    <div class="step"><b>设信号量。</b>资源信号量初值 = 可用数量；互斥信号量初值 = 1；同步信号量初值 = 0。给每个信号量写一句注释。</div>
+    <div class="step"><b>写代码并检查。</b>每个 P 都有对应 V；资源 P 一定在互斥 P 之前；没有「持有 mutex 等资源」的路径；不会有两个进程同时进临界区。</div>
+  </div>
+  <div class="callout exam"><div class="co-title">📌 生产者-消费者满分骨架</div>
+  <pre class="code">semaphore empty = n, full = 0, mutex = 1;
+Producer() {
+    while (1) {
+        produce(item);
+        P(empty);  P(mutex);
+        put(item);
+        V(mutex);  V(full);
+    }
+}
+Consumer() {
+    while (1) {
+        P(full);   P(mutex);
+        item = get();
+        V(mutex);  V(empty);
+        consume(item);
+    }
+}</pre>
+  评分点通常包括：信号量初值、P/V 配对、P 的顺序、临界区范围。代码写错顺序，后面全扣，所以先检查顺序再写细节。</div>
+
+  <h2 class="sec" id="wrong">6. 错题本三栏法：不抄题，抄「触发条件」</h2>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>栏</th><th>写什么</th><th>示例</th></tr>
+      <tr><td>① 题目定位</td><td>章节 + 题号 + 一句话题干</td><td>第 3 章 · 页面置换 · FIFO 3/4 页框</td></tr>
+      <tr><td>② 错因</td><td>不是「粗心」，要具体到「哪个概念/哪一步」</td><td>把「页框数增加」当成「缺页一定减少」，忘了 Belady</td></tr>
+      <tr><td>③ 正确触发条件</td><td>下次看到什么词，就该用什么方法</td><td>看到「FIFO + 页框数变化」→ 先想 Belady；看到「未来最晚」→ OPT</td></tr>
+    </table>
+  </div>
+  <p><b>复习节奏：</b>当天记 → 第 2 天重做 → 第 7 天重做 → 考前一周只翻第 ②③ 栏。错题本不是收藏夹，是「下一次不再错」的检查清单。本站练习场的「只看错题」就是电子版错题本，但建议你另外用纸笔写一遍错因。</p>
+
+  <h2 class="sec" id="real">7. 真题两遍法：第一遍学，第二遍考</h2>
+  <div class="split">
+    <div class="card"><h4>第一遍 · 按章做</h4><p>学完一章做对应真题，不限时，重点是「知道这章怎么考」。做错就回章节补，不追求分数。</p></div>
+    <div class="card"><h4>第二遍 · 按套限时</h4><p>考前 4~6 周开始，按套卷限时做 OS 部分（约 35 分钟），训练取舍与计算速度。做完只分析错题和不确定的题。</p></div>
+  </div>
+  <div class="callout warn"><div class="co-title">⚠️ 不要「看题背答案」</div>
+  真题的价值在「命题角度」和「采分点」，不在原题。第二遍如果只是记住选项，换一道同型题还是错。每道错题都要能说出：考的是哪个机制、第一步该算什么、陷阱在哪。</div>
+
+  <h2 class="sec" id="memory">8. 精确记忆清单（考前必须脱口而出）</h2>
+  <div class="grid cols-2">
+    <div class="card">
+      <h4>进程与线程</h4>
+      <ul>
+        <li>五状态：创建、就绪、运行、阻塞、终止；运行→阻塞主动，阻塞→就绪被动。</li>
+        <li>进程切换四步：保存现场 → 更新 PCB/入队 → 选新进程 → 恢复现场/换页表。</li>
+        <li>调度指标：周转 = 完成−到达；带权 = 周转/服务。</li>
+        <li>临界区四原则：空闲让进、忙则等待、有限等待、让权等待。</li>
+        <li>死锁四条件：互斥、不可剥夺、请求并保持、循环等待。</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>内存管理</h4>
+      <ul>
+        <li>分页：页号 + 偏移；物理地址 = 页框 × 页大小 + 偏移。</li>
+        <li>页表项数 = 2^页号位数；页表大小 = 项数 × 项大小。</li>
+        <li>无 TLB：分页/分段 2 次访存；段页式 3 次。</li>
+        <li>置换：OPT 最优不可实现；FIFO 有 Belady；LRU 近似最优；CLOCK 近似 LRU。</li>
+        <li>抖动根因：页框 < 工作集，缺页率过高。</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>文件与磁盘</h4>
+      <ul>
+        <li>连续：快、有外部碎片、难扩展；链接：灵活、隐式只能顺序；索引：随机访问、多占索引块。</li>
+        <li>硬链接共享 inode；软链接存路径、可跨文件系统。</li>
+        <li>FAT 表项数 = 磁盘块数。</li>
+        <li>混合索引：P = 块大小/地址大小；最大文件 = (d+P+P²+P³)×块大小。</li>
+        <li>磁盘时间 = 寻道 + 旋转（平均半圈）+ 传输。</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>I/O 管理</h4>
+      <ul>
+        <li>CPU 干预频率：程序查询 &gt; 中断 &gt; DMA &gt; 通道。</li>
+        <li>中断每字节/字；DMA 每块；通道每组 I/O。</li>
+        <li>层次：用户层 → 设备独立性 → 设备驱动 → 中断处理 → 硬件。</li>
+        <li>单缓冲 max(C,T)+M；双缓冲 max(C+M,T)。</li>
+        <li>SPOOLing：磁盘输入井/输出井，把独占设备虚拟成共享设备。</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2 class="sec" id="giveup">9. 常见弃疗点与对策</h2>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>弃疗点</th><th>为什么卡</th><th>对策</th></tr>
+      <tr><td>PV 操作看不懂</td><td>把它当数学，没建立「资源 + 队列」的直觉</td><td>先看本站动画和生产者-消费者代码，再用「先资源后互斥」检查；手写 5 遍骨架</td></tr>
+      <tr><td>多级页表算不清</td><td>位数、项数、页大小混在一起</td><td>固定三步：偏移位数 → 页号位数 → 每页项数；用 32 位/4KB/4B 反复练</td></tr>
+      <tr><td>银行家算法</td><td>表太大，算到一半乱</td><td>只写 Need=Max−Alloc；Work 表逐行更新；每次只找「Need ≤ Work」的进程，找到一个就划掉</td></tr>
+      <tr><td>磁盘调度图</td><td>不知道 SCAN 到不到端点</td><td>先看题目定义；默认按「实际移动」算；画横轴，标起点和请求点，按方向连线</td></tr>
+      <tr><td>英文缩写太多</td><td>PCB/TCB/TLB/SPOOLing 混</td><td>每个缩写写一张卡片：全称 + 一句话作用 + 一个例子；每天扫一遍</td></tr>
+      <tr><td>概念题总错</td><td>只背结论，没理解「为什么」</td><td>用「解决什么问题/没有会怎样/代价是什么」三问复述每个机制</td></tr>
+    </table>
+  </div>
+
+  <h2 class="sec" id="exam">10. 考场策略：先拿步骤分</h2>
+  <div class="steps">
+    <div class="step"><b>选择题控制节奏。</b>40 题 80 分，平均 1.5 分钟/题；OS 的 10 题控制在 15 分钟内，不会的先标记，别恋战。</div>
+    <div class="step"><b>大题先写公式。</b>调度题先画时间轴，页面置换先画表格，地址转换先写位数，PV 先列信号量。公式和步骤本身就是采分点。</div>
+    <div class="step"><b>先做会做的。</b>两道 OS 大题里，PV 和页表通常更容易拿分；磁盘/文件索引如果卡住，先写公式再算，别空着。</div>
+    <div class="step"><b>单位和小数。</b>周转时间写 ms，缺页率写 %，文件大小写 MB/GB；最后检查一遍「页号从 0 还是 1 开始」。</div>
+    <div class="step"><b>留 5 分钟检查。</b>重点查：PV 的 P 顺序、页表项数是否用了地址总位数、SCAN 是否漏算端点、缓冲公式是否漏 M。</div>
+  </div>
+
+  <h2 class="sec" id="daily">11. 每日节奏（可持续版）</h2>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>时段</th><th>动作</th><th>时长</th></tr>
+      <tr><td>早上/碎片时间</td><td>背精确记忆清单 1 页（状态转换/公式/缩写）</td><td>15 分钟</td></tr>
+      <tr><td>主学习时段</td><td>看 1 节内容 + 画 1 张图 + 做 4~6 题</td><td>60~90 分钟</td></tr>
+      <tr><td>晚上复盘</td><td>错题本第 ②③ 栏过一遍；不会的标记明天问</td><td>20 分钟</td></tr>
+      <tr><td>每周</td><td>1 次整套限时（OS 部分）+ 1 次错题重做</td><td>2 小时</td></tr>
+    </table>
+  </div>
+  <div class="callout ok"><div class="co-title">✅ 最后一句</div>
+  操作系统不是背出来的，是「画会 + 算会」的。每学一个机制，先能画图，再能算例，最后能讲给别人听。三件事都做到，35 分里拿 28+ 是正常结果。</div>
+
+  <p class="center" style="margin-top:28px"><a class="btn" href="ch01.html">回到第 1 章开始学 →</a> <a class="btn ghost" href="practice.html">去练习场 →</a></p>
+</div>
+
+<footer>
+  408 操作系统可视化课堂 · 备考方法论<br>
+  <div class="pagers"><a href="index.html">总览</a><a href="practice.html">练习场</a><a href="resources.html">资源导航</a></div>
+</footer>
+
+<script src="assets/app.js"></script>
+</body>
+</html>

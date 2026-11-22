@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第 2 章 进程与线程 · 408 操作系统可视化课堂</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<nav class="topbar"><div class="topbar-inner">
+  <a class="logo" href="index.html"><span class="dot"></span>408 操作系统可视化课堂</a>
+  <div class="nav-links">
+    <a href="index.html">总览</a><a href="ch01.html">系统概述</a><a href="ch02.html">进程与线程</a><a href="ch03.html">内存管理</a><a href="ch04.html">文件管理</a><a href="ch05.html">I/O 管理</a><a href="practice.html">练习场</a><a href="method.html">备考方法论</a><a href="resources.html">资源导航</a>
+  </div>
+  <button class="theme-btn" title="切换明暗主题">🌙</button>
+</div></nav>
+
+<div class="wrap">
+  <div class="hero">
+    <h1>第 2 章 · 进程与线程</h1>
+    <p>操作系统最核心的一章，也是 408 全卷最高频的一章：进程状态、调度算法、PV 操作、死锁，选择题和大题都能出。先把「进程是什么、怎么活、怎么排队、怎么合作」这四件事吃透。</p>
+    <p class="tagline">预计学习 8~10 小时 · 动画 1 集 · 实验室 2 个 · 练习 16 题 · 打卡 6 项</p>
+  </div>
+
+  <div class="toc"><span class="toc-label">本页导航</span><a href="#goal">学习目标</a><a href="#s1">进程是什么</a><a href="#s2">PCB 与状态</a><a href="#s3">进程控制</a><a href="#s4">进程通信</a><a href="#s5">线程</a><a href="#s6">调度</a><a href="#s7">同步互斥</a><a href="#s8">信号量 PV</a><a href="#s9">管程</a><a href="#s10">死锁</a><a href="#deep">进阶深挖</a><a href="#lesson">动画课堂</a><a href="#lab1">状态机</a><a href="#lab2">调度器</a><a href="#pit">避坑清单</a><a href="#quiz">章内练习</a><a href="#ck">打卡</a></div>
+
+  <div class="callout exam" id="goal"><div class="co-title">🎯 学习目标（学完你应该能）</div>
+  ① 说清进程与程序的区别，画出 PCB 的主要内容与五状态转换图；<br>
+  ② 区分进程切换与模式切换，说清进程切换的完整步骤；<br>
+  ③ 手算 FCFS/SJF/SRTN/HRRN/RR 的完成时间、周转时间、带权周转时间；<br>
+  ④ 用信号量写出生产者-消费者、读者-写者的 PV 代码，并解释 P 顺序为什么不能反；<br>
+  ⑤ 判断死锁的四个必要条件，用银行家算法求安全序列；<br>
+  ⑥ 区分死锁、饥饿、活锁，知道预防/避免/检测/解除各做什么。</div>
+
+  <h2 class="sec" id="s1">2.1 先说人话：程序不等于进程</h2>
+  <div class="callout life"><div class="co-title">🍳 生活类比</div>
+  <b>程序</b>是一张写好的菜谱，躺在书架上，不会自己动；<b>进程</b>是一个厨师拿着这张菜谱，在厨房里真正开火炒菜的过程。同一张菜谱可以给三个厨师同时用（同一个程序跑出多个进程），每个厨师有自己的灶台、锅铲和进度（独立地址空间、寄存器、程序计数器）。<br><br>
+  所以：程序是<b>静态</b>的指令集合，进程是程序的一次<b>动态执行过程</b>，有创建、运行、消亡的生命周期。</div>
+
+  <p><b>进程实体（进程映像）</b>由三部分组成：<b>程序段</b>（代码）、<b>数据段</b>（全局变量、堆）、<b>PCB</b>（进程控制块，OS 用来管理它的档案）。其中 PCB 是进程存在的唯一标志——没有 PCB 就没有进程。</p>
+
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>对比项</th><th>程序</th><th>进程</th></tr>
+      <tr><td>存在形态</td><td>静态的指令与数据集合，可长期保存</td><td>动态的执行过程，有生命周期</td></tr>
+      <tr><td>并发性</td><td>本身不能并发执行</td><td>多个进程可以并发</td></tr>
+      <tr><td>资源</td><td>不占用运行资源（存在磁盘上）</td><td>占用 CPU、内存、I/O 等资源</td></tr>
+      <tr><td>对应关系</td><td>一个程序可以对应多个进程</td><td>一个进程可以执行一个或多个程序（如调用库）</td></tr>
+      <tr><td>唯一标志</td><td>文件名 / 路径</td><td>PCB（进程控制块）</td></tr>
+    </table>
+  </div>
+
+  <h3 class="sub">进程的五个特征</h3>
+  <p><b>动态性</b>（最基本，有生命周期）、<b>并发性</b>（多进程交替推进）、<b>独立性</b>（独立获得资源、独立调度）、<b>异步性</b>（以不可预知的速度推进）、<b>结构性</b>（程序段 + 数据段 + PCB）。</p>
+
+  <h2 class="sec" id="s2">2.2 PCB 与进程状态：一张档案卡，五种人生</h2>
+  <h3 class="sub">2.2.1 PCB 里到底存了什么</h3>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>类别</th><th>内容</th><th>作用</th></tr>
+      <tr><td>标识信息</td><td>PID、UID、父进程 PID</td><td>唯一标识进程与所属用户</td></tr>
+      <tr><td>状态信息</td><td>当前状态、优先级、等待事件</td><td>调度与阻塞/唤醒判断</td></tr>
+      <tr><td>现场信息</td><td>程序计数器 PC、通用寄存器、PSW、栈指针</td><td>进程切换时保存/恢复现场</td></tr>
+      <tr><td>资源信息</td><td>页表基址、打开文件表、I/O 设备、信号量</td><td>定位地址空间与占用的资源</td></tr>
+      <tr><td>统计信息</td><td>CPU 使用时间、开始时间、记账数据</td><td>性能统计与调度参考</td></tr>
+      <tr><td>同步通信</td><td>消息队列指针、信号量、互斥量</td><td>进程间协作</td></tr>
+    </table>
+  </div>
+  <p>PCB 的组织方式有两种：<b>链接方式</b>（同一状态的 PCB 用指针串成队列，如就绪队列、阻塞队列）和<b>索引方式</b>（按状态建索引表，表项指向 PCB）。408 选择题常问「PCB 是进程存在的唯一标志」「PCB 常驻内存」。</p>
+
+  <h3 class="sub">2.2.2 五状态转换图（必须默画）</h3>
+  <div class="state-map" style="margin:14px 0">
+    <div class="state-node">创建<small>new</small></div>
+    <div class="state-node">就绪<small>ready</small></div>
+    <div class="state-node">运行<small>running</small></div>
+    <div class="state-node">阻塞<small>blocked</small></div>
+    <div class="state-node">终止<small>terminated</small></div>
+  </div>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>转换</th><th>触发事件</th><th>主动/被动</th><th>考点</th></tr>
+      <tr><td>创建 → 就绪</td><td>分配资源、初始化 PCB 完成，进入就绪队列</td><td>系统</td><td>创建阶段尚未获得 CPU</td></tr>
+      <tr><td>就绪 → 运行</td><td>调度程序选中它，分配 CPU</td><td>被动</td><td>就绪队列 → CPU</td></tr>
+      <tr><td>运行 → 就绪</td><td>时间片用完 / 被更高优先级抢占</td><td>被动</td><td>常见于分时/抢占式调度</td></tr>
+      <tr><td>运行 → 阻塞</td><td>请求 I/O、等待信号量、等待消息</td><td><b>主动</b></td><td>进程自己调用阻塞原语</td></tr>
+      <tr><td>阻塞 → 就绪</td><td>I/O 完成、信号量释放、消息到达</td><td><b>被动</b></td><td>由中断/其他进程唤醒</td></tr>
+      <tr><td>运行 → 终止</td><td>正常结束、异常、被杀死</td><td>主动/被动</td><td>释放资源、撤销 PCB</td></tr>
+    </table>
+  </div>
+  <div class="callout warn"><div class="co-title">⚠️ 三个「不存在」的转换</div>
+  阻塞 → 运行（必须先回就绪队列排队）、就绪 → 阻塞（没占 CPU 怎么会因 I/O 阻塞）、阻塞 → 终止（通常先唤醒再退出）。另外：<b>运行 → 阻塞是主动的，阻塞 → 就绪是被动的</b>，选择题最爱在这里设「主动/被动」陷阱。</div>
+
+  <p>有些教材还画出「七状态」：在五状态基础上增加<b>挂起就绪</b>和<b>挂起阻塞</b>，对应进程被换出到外存。挂起的原因通常是内存紧张或用户主动挂起；挂起就绪 → 就绪（被调入内存），挂起阻塞 → 阻塞（事件已发生且被调入）。408 主要以五状态为主，七状态了解即可。</p>
+
+  <h2 class="sec" id="s3">2.3 进程控制：创建、终止、阻塞、唤醒、切换</h2>
+  <p>进程控制由<b>原语</b>完成。原语是不可中断的原子操作，通常靠关中断/开中断实现。为什么必须原子？因为 PCB 队列、状态位是共享数据结构，改到一半被中断会 inconsistent。</p>
+
+  <h3 class="sub">2.3.1 进程创建</h3>
+  <div class="steps">
+    <div class="step">分配唯一 PID，申请一块空白 PCB。</div>
+    <div class="step">为新进程分配资源（内存、页表、打开文件表等）。</div>
+    <div class="step">初始化 PCB：状态设为「创建」，设置 PC 指向程序入口，初始化寄存器与优先级。</div>
+    <div class="step">把 PCB 插入就绪队列；若资源不足，留在创建态等待。</div>
+  </div>
+  <p><b>fork()</b> 是经典例子：子进程复制父进程的地址空间（现代 OS 用写时复制 COW 延迟复制），共享打开文件。返回值：父进程得到子进程 PID（>0），子进程得到 0，失败返回 -1。父子进程并发执行，顺序不确定。</p>
+
+  <h3 class="sub">2.3.2 进程终止</h3>
+  <p>正常结束、异常结束（越界、非法指令、I/O 故障）或被外界杀死。步骤：根据 PID 找到 PCB → 读取状态 → 若有子进程则处理（级联终止或交给 init）→ 回收资源 → 撤销 PCB。注意：<b>终止后 PCB 不一定立刻消失</b>，父进程可能还没 <code class="inline">wait()</code>，形成僵尸进程。</p>
+
+  <h3 class="sub">2.3.3 阻塞与唤醒</h3>
+  <p>阻塞是<b>进程自己</b>调用阻塞原语：保存现场 → 状态改为阻塞 → 插入对应事件的等待队列 → 转调度程序。唤醒是<b>其他进程/中断</b>调用唤醒原语：从等待队列摘下 → 状态改为就绪 → 插入就绪队列。阻塞和唤醒必须成对出现，且由不同进程执行。</p>
+
+  <h3 class="sub">2.3.4 进程切换：保存旧现场，恢复新现场</h3>
+  <div class="steps">
+    <div class="step">保存当前进程的 CPU 现场（PC、寄存器、PSW）到其 PCB。</div>
+    <div class="step">更新当前进程的 PCB 状态，并移入相应队列（就绪/阻塞）。</div>
+    <div class="step">从就绪队列选一个新进程，更新其 PCB 状态为运行。</div>
+    <div class="step">恢复新进程的现场，切换页表/地址空间，跳转到它的 PC。</div>
+  </div>
+  <div class="callout exam"><div class="co-title">📌 进程切换 ≠ 模式切换</div>
+  <b>模式切换</b>只是用户态 ↔ 内核态，当前进程还是同一个（如系统调用返回），开销小。<b>进程切换</b>要换 PCB、换地址空间、换页表，开销大。中断处理过程中可能只发生模式切换，不一定发生进程切换。</div>
+
+  <h2 class="sec" id="s4">2.4 进程通信（IPC）：三个渠道</h2>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>方式</th><th>做法</th><th>优点</th><th>缺点 / 考点</th></tr>
+      <tr><td><b>共享存储</b></td><td>OS 划出一块共享内存，进程直接读写；需用 PV/管程互斥</td><td>速度快，数据量大</td><td>共享区的互斥同步要程序员自己保证；分为低级（基于物理地址）与高级（基于逻辑地址/文件映射）</td></tr>
+      <tr><td><b>消息传递</b></td><td>以消息为单位，通过发送/接收原语交换；可直接（指名 PID）或间接（信箱/消息队列）</td><td>无需共享地址空间，适合分布式</td><td>消息拷贝有开销；消息队列有容量限制</td></tr>
+      <tr><td><b>管道</b></td><td>一个固定大小的环形缓冲区，写进程写入、读进程读出</td><td>简单，适合父子/兄弟进程</td><td>半双工；写满则写阻塞，读空则读阻塞；双方必须都存在</td></tr>
+    </table>
+  </div>
+  <div class="callout life"><div class="co-title">🥤 生活类比</div>
+  共享存储像<b>合租厨房</b>：大家都能进去用，但得约定谁先用灶台；消息传递像<b>发快递</b>：东西打包好，填地址，对方签收；管道像<b>传送带</b>：一头放、一头取，带宽固定，放满了就停。</div>
+
+  <h2 class="sec" id="s5">2.5 线程：进程里的「轻量级分身」</h2>
+  <p>引入线程是为了<b>减少并发执行的开销</b>：同一进程内的多个线程共享地址空间和资源，切换时不用换页表，开销远小于进程切换；线程也能更好地利用多核。</p>
+  <div class="split">
+    <div class="card">
+      <h4>线程私有</h4>
+      <p>线程 ID、程序计数器、寄存器组、栈、线程状态、优先级、局部变量。</p>
+      <p class="muted small">这些是「每个线程各干各的」所必需的现场。</p>
+    </div>
+    <div class="card">
+      <h4>线程共享（同进程内）</h4>
+      <p>地址空间、代码段、数据段、堆、打开文件表、信号处理函数、当前工作目录。</p>
+      <p class="muted small">共享带来效率，也带来数据竞争，需要同步。</p>
+    </div>
+  </div>
+
+  <h3 class="sub">用户级线程 vs 内核级线程</h3>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th></th><th>用户级线程（ULT）</th><th>内核级线程（KLT）</th></tr>
+      <tr><td>管理者</td><td>用户态线程库，内核不知道线程存在</td><td>内核直接管理、调度</td></tr>
+      <tr><td>切换</td><td>用户态完成，开销小</td><td>需进入内核，开销较大</td></tr>
+      <tr><td>阻塞影响</td><td>一个线程阻塞，整个进程阻塞</td><td>一个线程阻塞，其他线程可继续</td></tr>
+      <tr><td>多核</td><td>不能真正并行</td><td>可分配到多个核</td></tr>
+    </table>
+  </div>
+  <p>多线程模型：<b>多对一</b>（多个 ULT 映射到一个 KLT，效率高但一个阻塞全阻塞、不能多核）、<b>一对一</b>（每个 ULT 一个 KLT，并发好但开销大）、<b>多对多</b>（m 个 ULT 映射到 n 个 KLT，兼顾两者，实现复杂）。</p>
+
+  <h2 class="sec" id="s6">2.6 处理机调度：谁先上 CPU</h2>
+  <h3 class="sub">2.6.1 三级调度与调度时机</h3>
+  <div class="grid cols-3">
+    <div class="card"><h4 class="mini">高级调度（作业调度）</h4><p>从外存后备队列选作业调入内存，创建进程。频率最低。</p></div>
+    <div class="card"><h4 class="mini">中级调度（内存调度）</h4><p>把暂时不能运行的进程换出到外存（挂起），或把挂起进程换回内存。目的是提高内存利用率。</p></div>
+    <div class="card"><h4 class="mini">低级调度（进程调度）</h4><p>从就绪队列选进程分配 CPU。频率最高，是本章核心。</p></div>
+  </div>
+  <p><b>调度时机：</b>进程创建、终止、阻塞、I/O 完成、时间片用完、更高优先级进程到达（抢占式）。<b>不能调度的情况：</b>中断处理过程中（通常）、内核临界区中（视 OS 设计）。</p>
+  <p><b>调度方式：</b>非抢占式（进程主动放弃 CPU 才切换，简单、开销小、实时性差）与抢占式（更高优先级/时间片到就强制切换，响应好、开销大、需保护现场）。</p>
+
+  <h3 class="sub">2.6.2 调度指标（公式必须背）</h3>
+  <div class="formula"><span class="fx-label">基础公式</span>
+  周转时间 = 完成时间 − 到达时间<br>
+  带权周转时间 = 周转时间 ÷ 服务时间（≥ 1）<br>
+  等待时间 = 周转时间 − 服务时间（不考虑 I/O 时）<br>
+  响应时间 = 首次获得 CPU 的时间 − 提交时间</div>
+  <p>平均周转时间、平均带权周转时间都是把每个进程的值求平均。注意：<b>带权周转时间对短作业更敏感</b>，是衡量「短作业是否被善待」的重要指标。</p>
+
+  <h3 class="sub">2.6.3 七大调度算法</h3>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>算法</th><th>规则</th><th>抢占</th><th>优点</th><th>缺点 / 考点</th></tr>
+      <tr><td><b>FCFS</b> 先来先服务</td><td>按到达顺序排队</td><td>非抢占</td><td>公平、简单</td><td>短作业排队久（护航效应），平均周转不一定好</td></tr>
+      <tr><td><b>SJF/SPF</b> 短作业优先</td><td>每次选服务时间最短的</td><td>非抢占</td><td>平均等待/周转时间最短（理想）</td><td>需预知运行时间；长作业可能饥饿</td></tr>
+      <tr><td><b>SRTN</b> 最短剩余时间优先</td><td>SJF 的抢占版，新短作业可抢占</td><td>抢占</td><td>平均周转更优</td><td>抢占开销；长作业饥饿</td></tr>
+      <tr><td><b>HRRN</b> 高响应比优先</td><td>响应比 = (等待 + 服务) / 服务</td><td>非抢占</td><td>兼顾短作业与等待久的长作业，避免饥饿</td><td>每次调度要计算响应比</td></tr>
+      <tr><td><b>优先级</b></td><td>选优先级最高的</td><td>可抢占/非抢占</td><td>可区分紧急程度</td><td>低优先级饥饿；可用「老化」缓解</td></tr>
+      <tr><td><b>RR</b> 时间片轮转</td><td>就绪队列轮流执行一个时间片</td><td>抢占（时间片到）</td><td>响应快、公平，适合分时</td><td>时间片过大→退化为 FCFS；过小→切换开销大</td></tr>
+      <tr><td><b>多级反馈队列</b></td><td>多级队列，优先级递减、时间片递增；新进程进最高级，用完时间片降级</td><td>抢占</td><td>兼顾短作业、交互性与长作业，通用性强</td><td>实现复杂；低优先级可能饥饿</td></tr>
+    </table>
+  </div>
+
+  <div class="callout exam"><div class="co-title">📌 例题：SJF 非抢占（手算一遍）</div>
+  进程：P1(到达 0, 服务 7)、P2(2, 4)、P3(4, 1)、P4(5, 4)。<br>
+  调度顺序：P1 0~7 → P3 7~8（此时 P2、P3、P4 都已到达，选最短的 P3）→ P2 8~12 → P4 12~16。<br>
+  完成时间：P1=7、P2=12、P3=8、P4=16；周转：7、10、4、11；带权：1、2.5、4、2.75。<br>
+  平均周转 = (7+10+4+11)/4 = <b>8</b>；平均带权 = (1+2.5+4+2.75)/4 = <b>2.5625</b>。</div>
+
+  <h3 class="sub">2.6.4 实时调度</h3>
+  <p><b>EDF（最早截止期优先）：</b>动态优先级，截止期越早优先级越高，可抢占，理论上 CPU 利用率可达 100%。<b>RMS（速率单调调度）：</b>静态优先级，周期越短优先级越高，适合周期性硬实时任务，CPU 利用率有上限（n 个任务时约 n(2^(1/n)−1)）。</p>
+
+  <h2 class="sec" id="s7">2.7 同步与互斥：并发带来的麻烦</h2>
+  <div class="callout life"><div class="co-title">🚻 生活类比</div>
+  厕所只有一个隔间（临界资源），多个人（进程）都要用。如果两个人同时进去，就出乱子——这就是<b>互斥</b>。而「你先洗完我再用」是<b>同步</b>：不是抢，而是有先后依赖。同步是直接制约（合作），互斥是间接制约（争资源）。</div>
+
+  <p><b>临界区</b>是进程中访问临界资源的那段代码。互斥访问的四条原则（背）：</p>
+  <div class="grid cols-4">
+    <div class="card"><b>空闲让进</b><p class="small muted">临界区空着，就允许一个进程进入。</p></div>
+    <div class="card"><b>忙则等待</b><p class="small muted">已有进程在临界区，其他进程必须等。</p></div>
+    <div class="card"><b>有限等待</b><p class="small muted">等待的进程不能无限期等下去。</p></div>
+    <div class="card"><b>让权等待</b><p class="small muted">进不去就释放 CPU，不要忙等（理想）。</p></div>
+  </div>
+
+  <h3 class="sub">2.7.1 软件方法（四个经典，考试爱考缺陷）</h3>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>方法</th><th>核心代码</th><th>问题</th></tr>
+      <tr><td>单标志法</td><td><code class="inline">while(turn != i);</code> 临界区; <code class="inline">turn = j;</code></td><td>强制轮流，违反「空闲让进」</td></tr>
+      <tr><td>双标志先检查</td><td><code class="inline">while(flag[j]); flag[i]=true;</code></td><td>检查与置位之间可能被切换，两个进程同时进入，违反「忙则等待」</td></tr>
+      <tr><td>双标志后检查</td><td><code class="inline">flag[i]=true; while(flag[j]);</code></td><td>都先举手再等，可能互相等待，违反「空闲让进」/有限等待</td></tr>
+      <tr><td>Peterson</td><td><code class="inline">flag[i]=true; turn=j; while(flag[j] && turn==j);</code></td><td>满足互斥、空闲让进、有限等待；仍忙等，不满足「让权等待」</td></tr>
+    </table>
+  </div>
+
+  <h3 class="sub">2.7.2 硬件方法</h3>
+  <p><b>中断屏蔽：</b>关中断后临界区不会被打断，简单但只适合单 CPU，且用户态无权关中断。<b>TestAndSet（TS）：</b>原子地读出并置 true，返回旧值；<b>Swap：</b>原子交换两个变量的值。二者都满足互斥，但都是忙等，不满足让权等待，且可能饥饿。</p>
+
+  <h2 class="sec" id="s8">2.8 信号量与 PV 操作：408 大题的半壁江山</h2>
+  <p>信号量是一个整型变量，只能通过 <b>P（wait）</b> 和 <b>V（signal）</b> 两个原语访问。P 表示申请资源，V 表示释放资源。</p>
+  <pre class="code">// 记录型信号量
+typedef struct {
+    int value;          // 剩余资源数（可为负）
+    struct process *L;  // 等待队列
+} semaphore;
+
+void P(semaphore S) {   // wait：申请
+    S.value--;
+    if (S.value < 0) {
+        // 资源不够，把当前进程加入 S.L，阻塞
+        block(S.L);
+    }
+}
+void V(semaphore S) {   // signal：释放
+    S.value++;
+    if (S.value <= 0) {
+        // 还有进程在等，唤醒一个
+        wakeup(S.L);
+    }
+}</pre>
+  <div class="callout exam"><div class="co-title">📌 value 的含义（选择题必考）</div>
+  <b>S.value > 0：</b>还有这么多可用资源。<br>
+  <b>S.value = 0：</b>资源刚好用完，没有进程等待。<br>
+  <b>S.value < 0：</b>没有资源了，且 |S.value| 个进程正在等待。<br>
+  例：初值 3，当前 −2，说明资源已耗尽且 2 个进程在等待。</div>
+
+  <h3 class="sub">2.8.1 用信号量实现互斥</h3>
+  <pre class="code">semaphore mutex = 1;   // 互斥信号量初值为 1
+P(mutex);
+// 临界区
+V(mutex);</pre>
+
+  <h3 class="sub">2.8.2 用信号量实现同步（前趋关系）</h3>
+  <p>若 A 必须在 B 之前执行：设 <code class="inline">S = 0</code>；A 执行完 <code class="inline">V(S)</code>，B 开始前 <code class="inline">P(S)</code>。这样 B 会一直等到 A 发出信号。</p>
+
+  <h3 class="sub">2.8.3 生产者-消费者（必须会默写）</h3>
+  <pre class="code">semaphore empty = n;   // 空缓冲区数量
+semaphore full  = 0;   // 满缓冲区数量
+semaphore mutex = 1;   // 缓冲区互斥
+
+Producer:
+    while (true) {
+        produce(item);
+        P(empty);        // ① 先申请空位
+        P(mutex);        // ② 再进临界区
+        put(item);
+        V(mutex);        // ③ 退出临界区
+        V(full);         // ④ 通知消费者
+    }
+
+Consumer:
+    while (true) {
+        P(full);         // ① 先申请数据
+        P(mutex);        // ② 再进临界区
+        item = get();
+        V(mutex);        // ③ 退出临界区
+        V(empty);        // ④ 通知生产者
+        consume(item);
+    }</pre>
+  <div class="callout warn"><div class="co-title">⚠️ 为什么不能先 P(mutex) 再 P(empty)？</div>
+  如果生产者先拿到 mutex，再发现 empty=0 而被阻塞，此时 mutex 还在它手里；消费者想来取数据时被 mutex 挡在门外，无法执行 <code class="inline">V(empty)</code> 唤醒生产者——<b>互相等待，死锁</b>。<br>
+  口诀：<b>先资源信号量，后互斥信号量</b>；P 的顺序不能反，V 的顺序无所谓。</div>
+
+  <h3 class="sub">2.8.4 读者-写者（读者优先版）</h3>
+  <pre class="code">int count = 0;          // 当前读者数
+semaphore mutex = 1;    // 保护 count
+semaphore rw = 1;       // 读写互斥
+
+Reader:
+    P(mutex);
+    if (count == 0) P(rw);   // 第一个读者锁住写者
+    count++;
+    V(mutex);
+    read();
+    P(mutex);
+    count--;
+    if (count == 0) V(rw);   // 最后一个读者放行写者
+    V(mutex);
+
+Writer:
+    P(rw);
+    write();
+    V(rw);</pre>
+  <p>这个版本是<b>读者优先</b>：只要不断有读者到来，写者可能一直等（写者饥饿）。若改为写者优先，需要额外的信号量阻止新读者在写者等待时进入。</p>
+
+  <h2 class="sec" id="s9">2.9 管程：把同步封装起来</h2>
+  <p>管程（Monitor）把共享数据和对它的操作封装在一起，<b>同一时刻只允许一个进程在管程内执行</b>——互斥由编译器/语言机制保证，程序员不用手写 P/V。管程内用<b>条件变量</b>实现等待：<code class="inline">wait</code> 让进程在条件变量上等待并释放管程；<code class="inline">signal</code> 唤醒一个等待者。</p>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>对比</th><th>信号量</th><th>管程</th></tr>
+      <tr><td>本质</td><td>一个整型变量 + 等待队列，P/V 显式调用</td><td>语言级封装，互斥自动保证</td></tr>
+      <tr><td>互斥</td><td>程序员负责</td><td>编译器/运行时负责</td></tr>
+      <tr><td>条件变量</td><td>无</td><td>有，wait/signal 没有记忆：signal 时无人等待则丢失</td></tr>
+      <tr><td>典型</td><td>OS 内核、PV 大题</td><td>Java <code class="inline">synchronized</code> + <code class="inline">wait/notify</code>、C# lock</td></tr>
+    </table>
+  </div>
+
+  <h2 class="sec" id="s10">2.10 死锁：四个条件、四种对策</h2>
+  <p><b>死锁</b>是多个进程因竞争资源而互相等待，若无外力介入都无法推进。与饥饿的区别：死锁是「循环等待，永远解不开」；饥饿是「长期得不到资源，但理论上还能等到」。</p>
+
+  <h3 class="sub">2.10.1 四个必要条件（缺一不可）</h3>
+  <div class="grid cols-4">
+    <div class="card"><b>互斥</b><p class="small muted">资源一次只能被一个进程占用。</p></div>
+    <div class="card"><b>不可剥夺</b><p class="small muted">已获得的资源不能被强行抢走。</p></div>
+    <div class="card"><b>请求并保持</b><p class="small muted">占着已有资源，又去申请新资源。</p></div>
+    <div class="card"><b>循环等待</b><p class="small muted">存在进程—资源的环形等待链。</p></div>
+  </div>
+
+  <h3 class="sub">2.10.2 四种对策</h3>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>策略</th><th>做法</th><th>代价 / 考点</th></tr>
+      <tr><td><b>预防</b></td><td>破坏四个条件之一：一次性分配所有资源（破坏请求并保持）、可剥夺、按序分配资源（破坏循环等待）</td><td>资源利用率低、可能饥饿；按序分配最常用</td></tr>
+      <tr><td><b>避免</b></td><td>银行家算法：每次分配前判断是否仍存在安全序列</td><td>需预知最大需求；计算开销大；安全 ≠ 不死锁，但不安全一定可能死锁</td></tr>
+      <tr><td><b>检测</b></td><td>资源分配图化简；死锁定理：图不可完全化简则有死锁</td><td>单实例资源图中「有环」是死锁的充要条件；多实例有环不一定死锁</td></tr>
+      <tr><td><b>解除</b></td><td>资源剥夺、撤销进程、进程回退</td><td>选择牺牲者；回退需要检查点</td></tr>
+    </table>
+  </div>
+
+  <h3 class="sub">2.10.3 银行家算法（手算模板）</h3>
+  <p>数据结构：<b>Available</b>（可用资源）、<b>Max</b>（最大需求）、<b>Allocation</b>（已分配）、<b>Need = Max − Allocation</b>。安全性算法：Work = Available；反复找 <code class="inline">Need[i] ≤ Work</code> 的进程，令 <code class="inline">Work += Allocation[i]</code>，标记完成；若所有进程都能完成，则安全。</p>
+  <div class="callout exam"><div class="co-title">📌 经典例题（5 进程 3 类资源）</div>
+  Available = (3, 3, 2)。各进程 Need：P0(7,4,3)、P1(1,2,2)、P2(6,0,0)、P3(0,1,1)、P4(4,3,1)。<br>
+  Work=(3,3,2) → P1 Need(1,2,2) 可满足，完成后 Work=(5,3,2) → P3(0,1,1) 完成，Work=(7,4,3) → P4(4,3,1) 完成，Work=(7,4,5) → P0(7,4,3) 完成，Work=(7,5,5) → P2(6,0,0) 完成。<br>
+  安全序列：<b>P1 → P3 → P4 → P0 → P2</b>（答案不唯一）。</div>
+  <p><b>请求资源时：</b>① 检查 Request ≤ Need；② 检查 Request ≤ Available；③ 试探性分配（Available −= Request，Allocation += Request，Need −= Request）；④ 跑安全性算法；安全则正式分配，不安全则回滚并让进程等待。</p>
+
+  <h2 class="sec" id="deep">🚀 进阶深挖（教材级）</h2>
+  <p class="muted">以下内容对齐王道《操作系统考研复习指导》与汤小丹教材的处理深度，二轮复习必看。</p>
+
+  <h3 class="sub">深挖 1 · 进程切换到底贵在哪</h3>
+  <p>进程切换要保存/恢复寄存器与 PC、切换页表基址（CR3）、刷新 TLB（或加 ASID 避免全刷）、切换内核栈、更新调度数据结构。TLB 失效会让后续访存变慢，所以「进程切换开销」远大于「线程切换」。线程切换只需换寄存器与栈，不换地址空间。408 选择题常问「哪些操作会增大切换开销」。</p>
+
+  <h3 class="sub">深挖 2 · 调度算法的选择不是背出来的</h3>
+  <p>批处理系统追求吞吐量，常用 FCFS、SJF、HRRN；分时系统追求响应，常用 RR、多级反馈队列；实时系统追求截止时间，常用 EDF、RMS。题目给场景，先问三个问题：<b>是否允许抢占？是否知道运行时间？更在意响应还是吞吐？</b>答案自然出来。</p>
+
+  <h3 class="sub">深挖 3 · PV 大题的固定套路</h3>
+  <div class="steps">
+    <div class="step"><b>找角色。</b>把题目里的「谁」列成进程：生产者/消费者、读者/写者、司机/售票员、爸爸/儿子/女儿。</div>
+    <div class="step"><b>找资源与约束。</b>缓冲区容量、互斥访问的共享变量、谁必须先于谁（前趋关系）。</div>
+    <div class="step"><b>设信号量。</b>资源信号量初值 = 可用数量；互斥信号量初值 = 1；同步信号量初值 = 0。</div>
+    <div class="step"><b>写代码并检查。</b>每个 P 都有对应的 V；资源 P 在互斥 P 之前；不会出现「持有 mutex 等资源」的死锁。</div>
+  </div>
+
+  <h3 class="sub">深挖 4 · 死锁检测：资源分配图怎么化简</h3>
+  <p>圆圈是进程，方框是资源，方框内圆点表示实例数。进程 → 资源是请求边，资源 → 进程是分配边。化简：找一个「请求都能被满足」的进程，消去它的所有边，释放资源；重复。若最终所有边都能消去，则无死锁；否则有死锁。单实例图中「有环」等价于死锁；多实例图有环只是可能死锁，必须化简判断。</p>
+
+  <div class="callout views"><div class="co-title">🌐 多源视角（不同教材的讲法）</div>
+  <ul>
+    <li><b>【汤小丹】进程 = 程序 + 数据 + PCB：</b>强调「进程实体」概念，PCB 是 OS 感知进程存在的唯一依据。本站的五状态图按此体系绘制。</li>
+    <li><b>【王道】调度算法用「到达—服务」表推进：</b>做题时画时间轴，每一步只问「此刻谁已到达、谁最短/优先级最高」，比背结论稳。</li>
+    <li><b>【OSTEP】进程就是「正在运行的程序」+ 机器状态：</b>把进程抽象为「PC、寄存器、地址空间」三件套，和 408 的 PCB 现场信息完全对应。</li>
+    <li><b>【Linux】线程就是共享地址空间的进程（task）：</b>Linux 不区分进程/线程，统一用 task_struct，靠 clone 的共享标志决定共享哪些资源。可作为「线程共享/私有」的实例记忆。</li>
+  </ul>
+  <div class="src">参考：汤小丹《计算机操作系统（第四版）》第 2~3 章；王道《操作系统考研复习指导》第 2 章；OSTEP 第 4~5 章</div></div>
+
+  <h2 class="sec" id="lesson">🎬 动画课堂 · 第 2 集《一个进程的一生》</h2>
+  <p>从程序被加载，到 PCB、五状态、调度、线程、PV、死锁，用一条主线串起来。</p>
+  <div id="lesson-box"></div>
+
+  <h2 class="sec" id="lab1">🔬 实验室 1：进程状态机</h2>
+  <div class="lab" id="lab-state">
+    <div class="lab-title">点按钮，让进程走完一生 <span class="chip">五状态转换</span></div>
+    <div class="lab-desc">每点一个事件，观察当前状态是否允许该转换。非法转换会被拒绝——这正是选择题的判定逻辑。</div>
+    <div class="lab-stage">
+      <div class="state-map" id="state-map">
+        <div class="state-node" data-state="创建">创建<small>new</small></div>
+        <div class="state-node" data-state="就绪">就绪<small>ready</small></div>
+        <div class="state-node" data-state="运行">运行<small>running</small></div>
+        <div class="state-node" data-state="阻塞">阻塞<small>blocked</small></div>
+        <div class="state-node" data-state="终止">终止<small>terminated</small></div>
+      </div>
+      <div class="state-log" id="state-log"><div>初始状态：创建。点击下方事件开始。</div></div>
+    </div>
+    <div class="lab-ctrl">
+      <button data-act="admit">创建完成（创建→就绪）</button>
+      <button data-act="dispatch" class="ghost">调度（就绪→运行）</button>
+      <button data-act="timeout" class="ghost">时间片到（运行→就绪）</button>
+      <button data-act="io" class="ghost">等待 I/O（运行→阻塞）</button>
+      <button data-act="ioDone" class="ghost">I/O 完成（阻塞→就绪）</button>
+      <button data-act="exit" class="ghost">进程终止（运行→终止）</button>
+      <button id="state-reset" class="ghost">重置</button>
+    </div>
+    <div class="lab-note" id="state-note">提示：运行→阻塞是主动的；阻塞→就绪是被动的；阻塞不能直接变运行。</div>
+  </div>
+
+  <h2 class="sec" id="lab2">🔬 实验室 2：调度算法甘特图</h2>
+  <div class="lab" id="lab-sched">
+    <div class="lab-title">改算法，看谁等得最久 <span class="chip">FCFS / SJF / SRTN / RR / HRRN</span></div>
+    <div class="lab-desc">固定四个进程（P1 0ms/7、P2 2ms/4、P3 4ms/1、P4 5ms/4），切换算法与时间片，观察甘特图、周转时间与平均带权周转。</div>
+    <div class="lab-stage">
+      <div class="lab-tabs" id="sched-tabs">
+        <button data-alg="FCFS" class="on">FCFS</button>
+        <button data-alg="SJF">SJF（非抢占）</button>
+        <button data-alg="SRTN">SRTN（抢占）</button>
+        <button data-alg="RR">RR（时间片）</button>
+        <button data-alg="HRRN">HRRN</button>
+      </div>
+      <div class="gantt-wrap"><div class="gantt" id="gantt"></div></div>
+      <div id="sched-table" style="margin-top:12px"></div>
+    </div>
+    <div class="lab-ctrl">
+      <label>RR 时间片 q：<input id="sched-q" type="number" min="1" max="8" value="2"></label>
+      <button id="sched-run">重新计算</button>
+      <button id="sched-reset" class="ghost">恢复默认</button>
+    </div>
+    <div class="lab-note" id="sched-note"></div>
+  </div>
+
+  <h2 class="sec" id="pit">⚠️ 本章避坑清单</h2>
+  <div class="steps plain">
+    <div class="step">PCB 是进程存在的唯一标志；程序不是进程，程序段也不是 PCB。</div>
+    <div class="step">运行→阻塞是主动，阻塞→就绪是被动；阻塞不能直接到运行。</div>
+    <div class="step">进程切换 ≠ 模式切换；系统调用返回可能只发生模式切换。</div>
+    <div class="step">用户级线程一个阻塞全进程阻塞，不能利用多核；内核级线程才可以。</div>
+    <div class="step">SJF 平均周转最短，但可能饿死长作业；HRRN 用响应比缓解饥饿。</div>
+    <div class="step">PV 里「先 P 资源，后 P 互斥」；反过来会死锁。</div>
+    <div class="step">S.value < 0 时，绝对值才是等待进程数，不是资源数。</div>
+    <div class="step">银行家算法「安全」只是「存在安全序列」，不是「一定不死锁」；不安全状态一定可能死锁。</div>
+    <div class="step">单实例资源分配图有环 ⇔ 死锁；多实例有环不一定。</div>
+  </div>
+
+  <h2 class="sec" id="quiz">📝 章内练习（16 题 · 基础 → 提高 → 真题改编）</h2>
+
+  <h3 class="sub" style="color:var(--green)">🟢 第一档 · 基础（4 题）</h3>
+
+  <div class="quiz" data-answer="C" data-diff="basic">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl basic">基础</span>练习 1 · 考点：进程与程序</div>
+    下列关于进程与程序的叙述，正确的是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 进程是静态的，程序是动态的</div>
+      <div class="opt" data-opt="B">B. 一个程序只能对应一个进程</div>
+      <div class="opt" data-opt="C">C. 进程是程序的一次执行过程，有生命周期</div>
+      <div class="opt" data-opt="D">D. 程序的存在标志是 PCB</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 C。程序是静态指令集合，进程是动态执行过程，有创建、运行、消亡。同一个程序可以对应多个进程（如开多个浏览器窗口）；PCB 是进程存在的唯一标志，不是程序的。</div>
+  </div>
+
+  <div class="quiz" data-answer="B" data-diff="basic">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl basic">基础</span>练习 2 · 考点：PCB</div>
+    操作系统感知进程存在的唯一标志是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 程序段</div>
+      <div class="opt" data-opt="B">B. PCB</div>
+      <div class="opt" data-opt="C">C. 数据段</div>
+      <div class="opt" data-opt="D">D. 进程的优先级</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 B。PCB 记录进程标识、状态、现场、资源等信息，OS 通过 PCB 管理和调度进程；进程被撤销时 PCB 也被回收。程序段和数据段只是进程实体的一部分，不能作为存在标志。</div>
+  </div>
+
+  <div class="quiz" data-answer="D" data-diff="basic">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl basic">基础</span>练习 3 · 考点：状态转换</div>
+    下列进程状态转换中，<b>不可能</b>直接发生的是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 运行 → 阻塞</div>
+      <div class="opt" data-opt="B">B. 运行 → 就绪</div>
+      <div class="opt" data-opt="C">C. 阻塞 → 就绪</div>
+      <div class="opt" data-opt="D">D. 阻塞 → 运行</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 D。阻塞进程被唤醒后先进入就绪队列，必须再被调度才能运行，不能直接跳到运行。A 是进程主动等待 I/O；B 是时间片到/被抢占；C 是 I/O 完成或信号量释放。</div>
+  </div>
+
+  <div class="quiz" data-answer="A" data-diff="basic">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl basic">基础</span>练习 4 · 考点：线程共享资源</div>
+    同一进程内的多个线程，通常<b>不共享</b>的是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 栈和寄存器</div>
+      <div class="opt" data-opt="B">B. 代码段</div>
+      <div class="opt" data-opt="C">C. 全局变量</div>
+      <div class="opt" data-opt="D">D. 打开文件表</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 A。线程私有：线程 ID、PC、寄存器组、栈、局部变量、状态。共享：地址空间、代码段、数据段/全局变量、堆、打开文件表。栈必须私有，否则函数调用与局部变量会互相踩踏。</div>
+  </div>
+
+  <h3 class="sub" style="color:var(--accent)">🟡 第二档 · 提高（4 题）</h3>
+
+  <div class="quiz" data-answer="C" data-diff="mid">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl mid">提高</span>练习 5 · 考点：进程切换</div>
+    进程切换过程中，通常<b>不需要</b>做的是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 保存当前进程的 PC 和寄存器</div>
+      <div class="opt" data-opt="B">B. 更新 PCB 状态并移入相应队列</div>
+      <div class="opt" data-opt="C">C. 把当前进程的程序代码复制到新进程</div>
+      <div class="opt" data-opt="D">D. 恢复新进程的现场并切换页表</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 C。进程切换是「换执行现场」，不是复制代码；代码段可以共享或本来就在各自地址空间。A、B、D 都是标准步骤，D 中切换页表/地址空间是进程切换比线程切换贵的关键。</div>
+  </div>
+
+  <div class="quiz" data-answer="B" data-diff="mid">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl mid">提高</span>练习 6 · 考点：用户级线程</div>
+    用户级线程的主要缺点是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 线程切换必须进入内核，开销大</div>
+      <div class="opt" data-opt="B">B. 一个线程阻塞会导致整个进程阻塞，且不能利用多核并行</div>
+      <div class="opt" data-opt="C">C. 无法在同一进程内共享地址空间</div>
+      <div class="opt" data-opt="D">D. 必须一对一映射到内核线程</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 B。用户级线程由用户态库管理，内核只看到一个进程；某个线程发起阻塞系统调用，内核会阻塞整个进程，其他线程也跑不了；内核也不知道多线程存在，无法分配到多核。A 是内核级线程的缺点；C、D 与事实相反。</div>
+  </div>
+
+  <div class="quiz" data-answer="B" data-diff="mid">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl mid">提高</span>练习 7 · 考点：SJF 计算</div>
+    三个进程：P1(到达 0，服务 5)、P2(到达 1，服务 2)、P3(到达 2，服务 1)。采用非抢占式 SJF，平均周转时间是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 4.00</div>
+      <div class="opt" data-opt="B">B. 5.33</div>
+      <div class="opt" data-opt="C">C. 6.00</div>
+      <div class="opt" data-opt="D">D. 8.00</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 B。0 时刻只有 P1，先运行 P1 到 5；此时 P2、P3 都已到达，选最短的 P3（1）运行 5~6；再运行 P2 6~8。完成时间：P1=5、P2=8、P3=6；周转：5、7、4；平均 = (5+7+4)/3 = 16/3 ≈ <b>5.33</b>。对应等待时间：0、5、3。</div>
+  </div>
+
+  <div class="quiz" data-answer="C" data-diff="mid">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl mid">提高</span>练习 8 · 考点：RR 计算</div>
+    三个进程：P1(到达 0，服务 5)、P2(到达 1，服务 2)、P3(到达 2，服务 1)。采用时间片 q=2 的轮转调度，平均周转时间是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 3.67</div>
+      <div class="opt" data-opt="B">B. 4.33</div>
+      <div class="opt" data-opt="C">C. 4.67</div>
+      <div class="opt" data-opt="D">D. 5.33</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 C。时间轴：P1 0~2（剩 3）；P2 2~4 完成；P3 4~5 完成；P1 5~7（剩 1）；P1 7~8 完成。完成时间：P1=8、P2=4、P3=5；周转：8、3、3；平均 = 14/3 ≈ <b>4.67</b>。RR 的响应好，但周转不一定优于 SJF。</div>
+  </div>
+
+  <h3 class="sub" style="color:var(--brand)">🔴 第三档 · 真题改编（8 题 · 题型对标）</h3>
+
+  <div class="quiz" data-answer="D" data-diff="real" data-year="2014">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2014 题型</span>练习 9 · 考点：临界区四原则</div>
+    下列原则中，<b>不</b>属于临界区互斥访问四条原则的是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 空闲让进</div>
+      <div class="opt" data-opt="B">B. 忙则等待</div>
+      <div class="opt" data-opt="C">C. 有限等待</div>
+      <div class="opt" data-opt="D">D. 优先级高者先进入临界区</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 D。四条原则是空闲让进、忙则等待、有限等待、让权等待。优先级是调度策略，不是临界区互斥的必要条件；如果按优先级插队，反而可能破坏有限等待。</div>
+  </div>
+
+  <div class="quiz" data-answer="A" data-diff="real" data-year="2016">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2016 题型</span>练习 10 · 考点：Peterson 算法</div>
+    Peterson 算法满足的互斥原则是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 互斥、空闲让进、有限等待，但不满足让权等待</div>
+      <div class="opt" data-opt="B">B. 只满足互斥，其他都不满足</div>
+      <div class="opt" data-opt="C">C. 同时满足四条，包括让权等待</div>
+      <div class="opt" data-opt="D">D. 不满足互斥，只满足有限等待</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 A。Peterson 用「flag 举手 + turn 让位」保证互斥、空闲让进、有限等待；但进不去时仍在 while 自旋，占用 CPU，属于忙等，不满足让权等待。这是软件方法的通病。</div>
+  </div>
+
+  <div class="quiz" data-answer="B" data-diff="real" data-year="2011">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2011 题型</span>练习 11 · 考点：信号量 value</div>
+    某记录型信号量 S 的初值为 3。经过若干次 P、V 操作后，S.value = −2，这意味着：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 还有 2 个资源可用</div>
+      <div class="opt" data-opt="B">B. 资源已用完，有 2 个进程在等待</div>
+      <div class="opt" data-opt="C">C. 有 2 个进程正在使用资源</div>
+      <div class="opt" data-opt="D">D. 信号量出错，value 不能为负</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 B。记录型信号量的 value 可以为负：负值的绝对值 = 等待队列中的进程数。value=−2 说明 3 个资源早已分完，还有 2 个进程因申请不到而阻塞。若为整型信号量（不记录等待队列），才会出现「一直减」的忙等，但题目明确是记录型。</div>
+  </div>
+
+  <div class="quiz" data-answer="C" data-diff="real" data-year="2019">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2019 题型</span>练习 12 · 考点：生产者-消费者 P 顺序</div>
+    在生产者-消费者问题中，生产者执行 <code class="inline">P(empty)</code> 与 <code class="inline">P(mutex)</code> 的顺序必须是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 先 P(mutex)，再 P(empty)</div>
+      <div class="opt" data-opt="B">B. 顺序任意，不影响结果</div>
+      <div class="opt" data-opt="C">C. 先 P(empty)，再 P(mutex)</div>
+      <div class="opt" data-opt="D">D. 两个 P 必须合并成一个原子操作</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 C。若先 P(mutex) 再 P(empty)，当缓冲区满时生产者持有 mutex 阻塞，消费者无法进入临界区执行 V(empty)，双方互相等待——死锁。口诀：<b>先资源，后互斥</b>。V 的顺序通常不影响正确性。</div>
+  </div>
+
+  <div class="quiz" data-answer="D" data-diff="real" data-year="2013">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2013 题型</span>练习 13 · 考点：读者-写者</div>
+    读者优先的读者-写者模型中，可能发生的是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 两个写者同时写文件</div>
+      <div class="opt" data-opt="B">B. 读者与写者同时访问文件</div>
+      <div class="opt" data-opt="C">C. 读者被写者永久阻塞</div>
+      <div class="opt" data-opt="D">D. 写者长期得不到机会（写者饥饿）</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 D。读者优先版本中，只要还有读者在或不断有新读者到来，<code class="inline">rw</code> 就不会释放，写者可能一直等。A、B 被 rw 互斥排除；C 与「读者优先」相反。</div>
+  </div>
+
+  <div class="quiz" data-answer="A" data-diff="real" data-year="2015">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2015 题型</span>练习 14 · 考点：死锁必要条件</div>
+    下列各项中，<b>不</b>属于死锁必要条件的是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 进程优先级相同</div>
+      <div class="opt" data-opt="B">B. 互斥条件</div>
+      <div class="opt" data-opt="C">C. 请求并保持条件</div>
+      <div class="opt" data-opt="D">D. 循环等待条件</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 A。死锁四个必要条件：互斥、不可剥夺、请求并保持、循环等待。优先级相同既不是必要条件，也不是充分条件；优先级不同的进程同样可能死锁。</div>
+  </div>
+
+  <div class="quiz" data-answer="A" data-diff="real" data-year="2018">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2018 题型</span>练习 15 · 考点：银行家算法安全序列</div>
+    系统有 3 类资源，Available=(1,1,1)。三个进程的 Allocation / Need 分别为：P1(1,0,0)/(1,0,0)，P2(0,1,0)/(2,1,0)，P3(0,0,1)/(0,0,1)。下列哪个是安全序列？</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. P1 → P2 → P3</div>
+      <div class="opt" data-opt="B">B. P2 → P1 → P3</div>
+      <div class="opt" data-opt="C">C. P3 → P2 → P1</div>
+      <div class="opt" data-opt="D">D. 不存在安全序列</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 A。Work=(1,1,1)：P1 Need(1,0,0) 满足，完成后 Work=(2,1,1)；P2 Need(2,1,0) 满足，完成后 Work=(2,2,1)；P3 Need(0,0,1) 满足，全部完成。B 中 P2 初始 Need 第一类为 2 > 1，不能先做；C 中 P3 先做后 Work=(1,1,2)，P2 仍缺第一类 1，不能接着做；D 错，安全序列存在。</div>
+  </div>
+
+  <div class="quiz" data-answer="C" data-diff="real" data-year="2021">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2021 题型</span>练习 16 · 考点：多级反馈队列</div>
+    多级反馈队列调度算法中，新创建的进程通常：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 直接进入优先级最低的队列</div>
+      <div class="opt" data-opt="B">B. 进入时间片最长的队列</div>
+      <div class="opt" data-opt="C">C. 进入优先级最高、时间片最短的队列</div>
+      <div class="opt" data-opt="D">D. 随机选择一个队列</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 C。多级反馈队列让新进程先到最高优先级、最短时间片的队列，短作业/交互型进程能快速完成；用完时间片还没完就降到下一级（时间片变长），长作业逐步下沉，兼顾吞吐与响应。低优先级队列可能饥饿，需老化。</div>
+  </div>
+
+  <h2 class="sec" id="ck">✅ 本章打卡清单 <span class="progress-pill">0 / 6 已打卡</span></h2>
+  <div class="checklist" data-ck-scope>
+    <label class="check-item" data-ck="ch02-1"><input type="checkbox"><span>能默画五状态转换图，并说清每个转换的触发事件与主动/被动</span></label>
+    <label class="check-item" data-ck="ch02-2"><input type="checkbox"><span>能说出 PCB 的五类内容，以及进程切换的四个步骤</span></label>
+    <label class="check-item" data-ck="ch02-3"><input type="checkbox"><span>能手算 FCFS/SJF/RR 的完成时间、周转时间、带权周转时间</span></label>
+    <label class="check-item" data-ck="ch02-4"><input type="checkbox"><span>能默写生产者-消费者的 PV 代码，并解释 P 顺序不能反</span></label>
+    <label class="check-item" data-ck="ch02-5"><input type="checkbox"><span>能说出死锁四个必要条件、四种对策，并用银行家算法求安全序列</span></label>
+    <label class="check-item" data-ck="ch02-6"><input type="checkbox"><span>完成章内 16 题，错题能说出错因并收藏/重做</span></label>
+  </div>
+
+  <p class="center" style="margin-top:28px"><a class="btn" href="ch03.html">下一章：内存管理 →</a></p>
+</div>
+
+<footer>
+  408 操作系统可视化课堂 · 第 2 章<br>
+  <div class="pagers"><a href="ch01.html">上一章</a><a href="index.html">总览</a><a href="ch03.html">下一章</a></div>
+</footer>
+
+<script src="assets/app.js"></script>
+<script src="assets/lesson-ch02.js"></script>
+<script src="assets/lesson-player.js"></script>
+<script>
+/* 实验室 1：进程状态机 */
+(function () {
+  var cur = "创建";
+  var ALLOW = {
+    admit:    { from: "创建", to: "就绪", text: "创建完成，PCB 初始化后进入就绪队列" },
+    dispatch: { from: "就绪", to: "运行", text: "调度程序选中，分配 CPU" },
+    timeout:  { from: "运行", to: "就绪", text: "时间片用完或被更高优先级抢占，回到就绪队列" },
+    io:       { from: "运行", to: "阻塞", text: "进程主动请求 I/O，进入该事件的等待队列" },
+    ioDone:   { from: "阻塞", to: "就绪", text: "I/O 完成，被中断唤醒，回到就绪队列排队" },
+    exit:     { from: "运行", to: "终止", text: "进程正常结束或被终止，回收资源、撤销 PCB" }
+  };
+  var map = document.getElementById("state-map");
+  var log = document.getElementById("state-log");
+  var note = document.getElementById("state-note");
+  if (!map) return;
+  function paint() {
+    map.querySelectorAll(".state-node").forEach(function (n) {
+      var s = n.getAttribute("data-state");
+      n.classList.toggle("on", s === cur);
+      n.classList.toggle("dead", cur === "终止" && s !== "终止");
+    });
+  }
+  function addLog(text, bad) {
+    var d = document.createElement("div");
+    d.textContent = text;
+    d.style.color = bad ? "var(--red)" : "var(--ink-2)";
+    log.appendChild(d);
+    log.scrollTop = log.scrollHeight;
+  }
+  map.parentNode.parentNode.addEventListener("click", function (ev) {
+    var b = ev.target.closest("[data-act]");
+    if (b) {
+      var act = b.getAttribute("data-act");
+      var rule = ALLOW[act];
+      if (cur === rule.from) {
+        cur = rule.to;
+        addLog("✓ " + rule.text + " → 当前：" + cur, false);
+        note.textContent = "当前状态：" + cur + "。继续选择合法事件，或点重置。";
+        paint();
+      } else {
+        addLog("✗ 非法转换：当前是「" + cur + "」，不能执行「" + b.textContent + "」", true);
+        note.textContent = "提示：运行→阻塞是主动的；阻塞→就绪是被动的；阻塞不能直接变运行。";
+      }
+    } else if (ev.target.id === "state-reset") {
+      cur = "创建";
+      log.innerHTML = "<div>已重置：创建。点击下方事件开始。</div>";
+      note.textContent = "提示：运行→阻塞是主动的；阻塞→就绪是被动的；阻塞不能直接变运行。";
+      paint();
+    }
+  });
+  paint();
+})();
+
+/* 实验室 2：调度算法甘特图 */
+(function () {
+  var PROCS = [
+    { pid: "P1", arr: 0, burst: 7, color: "#0f766e" },
+    { pid: "P2", arr: 2, burst: 4, color: "#d97706" },
+    { pid: "P3", arr: 4, burst: 1, color: "#6d28d9" },
+    { pid: "P4", arr: 5, burst: 4, color: "#dc2626" }
+  ];
+  var alg = "FCFS", q = 2, segments = [], result = [];
+  var tabs = document.getElementById("sched-tabs");
+  var gantt = document.getElementById("gantt");
+  var table = document.getElementById("sched-table");
+  var note = document.getElementById("sched-note");
+  var qInput = document.getElementById("sched-q");
+  if (!tabs) return;
+
+  function cloneProcs() { return PROCS.map(function (p) { return { pid: p.pid, arr: p.arr, burst: p.burst, left: p.burst, color: p.color, finish: 0 }; }); }
+  function push(pid, start, end, color) {
+    if (end <= start) return;
+    var last = segments[segments.length - 1];
+    if (last && last.pid === pid && last.end === start) { last.end = end; return; }
+    segments.push({ pid: pid, start: start, end: end, color: color });
+  }
+  function pickShortest(list) { var best = list[0]; list.forEach(function (p) { if (p.left < best.left) best = p; }); return best; }
+
+  function runFCFS() {
+    var ps = cloneProcs().sort(function (a, b) { return a.arr - b.arr; });
+    var t = 0;
+    ps.forEach(function (p) {
+      if (t < p.arr) t = p.arr;
+      push(p.pid, t, t + p.burst, p.color); t += p.burst; p.finish = t;
+    });
+    return ps;
+  }
+  function runSJF() {
+    var ps = cloneProcs(), t = 0, done = 0, n = ps.length;
+    while (done < n) {
+      var avail = ps.filter(function (p) { return p.arr <= t && p.left > 0; });
+      if (!avail.length) { t = Math.min.apply(null, ps.filter(function (p) { return p.left > 0; }).map(function (p) { return p.arr; })); continue; }
+      var p = pickShortest(avail);
+      push(p.pid, t, t + p.left, p.color); t += p.left; p.left = 0; p.finish = t; done++;
+    }
+    return ps;
+  }
+  function runSRTN() {
+    var ps = cloneProcs(), t = 0, done = 0, n = ps.length;
+    while (done < n) {
+      var avail = ps.filter(function (p) { return p.arr <= t && p.left > 0; });
+      if (!avail.length) { t++; continue; }
+      var p = pickShortest(avail);
+      push(p.pid, t, t + 1, p.color); t++; p.left--;
+      if (p.left === 0) { p.finish = t; done++; }
+    }
+    return ps;
+  }
+  function runRR(quantum) {
+    var ps = cloneProcs(), t = 0, done = 0, n = ps.length, queue = [], added = {}, last = 0;
+    while (done < n) {
+      ps.forEach(function (p) { if (p.arr <= t && p.left > 0 && !added[p.pid]) { queue.push(p); added[p.pid] = true; } });
+      if (!queue.length) { t++; continue; }
+      var p = queue.shift();
+      var run = Math.min(quantum, p.left);
+      push(p.pid, t, t + run, p.color); t += run; p.left -= run;
+      ps.forEach(function (x) { if (x.arr <= t && x.left > 0 && !added[x.pid]) { queue.push(x); added[x.pid] = true; } });
+      if (p.left === 0) { p.finish = t; done++; }
+      else queue.push(p);
+    }
+    return ps;
+  }
+  function runHRRN() {
+    var ps = cloneProcs(), t = 0, done = 0, n = ps.length;
+    while (done < n) {
+      var avail = ps.filter(function (p) { return p.arr <= t && p.left > 0; });
+      if (!avail.length) { t = Math.min.apply(null, ps.filter(function (p) { return p.left > 0; }).map(function (p) { return p.arr; })); continue; }
+      var best = avail[0], bestR = -1;
+      avail.forEach(function (p) {
+        var r = (t - p.arr + p.burst) / p.burst;
+        if (r > bestR) { bestR = r; best = p; }
+      });
+      push(best.pid, t, t + best.left, best.color); t += best.left; best.left = 0; best.finish = t; done++;
+    }
+    return ps;
+  }
+  function simulate() {
+    segments = [];
+    if (alg === "FCFS") result = runFCFS();
+    else if (alg === "SJF") result = runSJF();
+    else if (alg === "SRTN") result = runSRTN();
+    else if (alg === "RR") result = runRR(q);
+    else result = runHRRN();
+  }
+  function render() {
+    var maxT = Math.max.apply(null, result.map(function (p) { return p.finish; }));
+    var html = "";
+    result.forEach(function (p) {
+      html += '<div class="gantt-row"><div class="g-label">' + p.pid + "</div><div class=\"gantt-track\">";
+      segments.filter(function (s) { return s.pid === p.pid; }).forEach(function (s) {
+        var left = s.start / maxT * 100, width = (s.end - s.start) / maxT * 100;
+        html += '<div class="gantt-bar" style="left:' + left + '%;width:' + width + '%;background:' + s.color + '" title="' + s.start + '~' + s.end + '">' + (width > 5 ? (s.end - s.start) : "") + "</div>";
+      });
+      html += "</div></div>";
+    });
+    html += '<div class="gantt-axis"><span>0</span><span>' + Math.round(maxT / 2) + "</span><span>" + maxT + " ms</span></div>";
+    gantt.innerHTML = html;
+
+    var rows = '<div class="tbl-wrap"><table class="tbl"><tr><th>进程</th><th>到达</th><th>服务</th><th>完成</th><th>周转</th><th>带权周转</th></tr>';
+    var sumT = 0, sumW = 0;
+    result.forEach(function (p) {
+      var T = p.finish - p.arr, W = T / p.burst;
+      sumT += T; sumW += W;
+      rows += "<tr><td>" + p.pid + "</td><td>" + p.arr + "</td><td>" + p.burst + "</td><td>" + p.finish + "</td><td>" + T + "</td><td>" + W.toFixed(2) + "</td></tr>";
+    });
+    rows += "<tr><td><b>平均</b></td><td>—</td><td>—</td><td>—</td><td><b>" + (sumT / result.length).toFixed(2) + "</b></td><td><b>" + (sumW / result.length).toFixed(2) + "</b></td></tr></table></div>";
+    table.innerHTML = rows;
+    note.innerHTML = "当前算法：<b>" + alg + (alg === "RR" ? "（q=" + q + "）" : "") + "</b>。平均周转时间 " + (sumT / result.length).toFixed(2) + " ms，平均带权周转 " + (sumW / result.length).toFixed(2) + "。";
+  }
+  tabs.addEventListener("click", function (ev) {
+    var b = ev.target.closest("[data-alg]");
+    if (!b) return;
+    alg = b.getAttribute("data-alg");
+    tabs.querySelectorAll("button").forEach(function (x) { x.classList.toggle("on", x === b); });
+    simulate(); render();
+  });
+  document.getElementById("sched-run").addEventListener("click", function () {
+    q = Math.max(1, parseInt(qInput.value, 10) || 2);
+    qInput.value = q;
+    simulate(); render();
+  });
+  document.getElementById("sched-reset").addEventListener("click", function () {
+    alg = "FCFS"; q = 2; qInput.value = 2;
+    tabs.querySelectorAll("button").forEach(function (x) { x.classList.toggle("on", x.getAttribute("data-alg") === "FCFS"); });
+    simulate(); render();
+  });
+  simulate(); render();
+})();
+</script>
+</body>
+</html>

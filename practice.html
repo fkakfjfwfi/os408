@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>练习场 · 408 操作系统可视化课堂</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<nav class="topbar"><div class="topbar-inner">
+  <a class="logo" href="index.html"><span class="dot"></span>408 操作系统可视化课堂</a>
+  <div class="nav-links">
+    <a href="index.html">总览</a><a href="ch01.html">系统概述</a><a href="ch02.html">进程与线程</a><a href="ch03.html">内存管理</a><a href="ch04.html">文件管理</a><a href="ch05.html">I/O 管理</a><a href="practice.html">练习场</a><a href="method.html">备考方法论</a><a href="resources.html">资源导航</a>
+  </div>
+  <button class="theme-btn" title="切换明暗主题">🌙</button>
+</div></nav>
+
+<div class="wrap">
+  <div class="hero">
+    <h1>练习场 · 跨章组卷</h1>
+    <p>五章题库自动汇总：基础卷、提高卷、真题改编卷、全真模拟卷。答错的题自动进错题本，收藏与答题进度和章节页共享，存在本机浏览器。</p>
+    <p class="tagline">80 题题库 · 四套组卷 · 错题本 · 收藏 · 随机 10 题</p>
+  </div>
+
+  <div class="callout exam"><div class="co-title">📌 怎么用最有效</div>
+  学完一章 → 做该章 16 题 → 来练习场做「基础卷」巩固 → 二轮做「提高卷 + 真题改编卷」→ 考前用「全真模拟卷」限时 20 题。错题不要只看答案，要回到对应章节把概念/公式重写一遍。</div>
+
+  <h2 class="sec">选择试卷</h2>
+  <div class="paper-grid">
+    <div class="paper-card" data-paper="basic">
+      <h4>基础卷</h4>
+      <p>五章基础题汇总，检验概念是否听懂。</p>
+      <div class="pc-meta">20 题 · 建议 25 分钟</div>
+    </div>
+    <div class="paper-card" data-paper="mid">
+      <h4>提高卷</h4>
+      <p>概念辨析与计算，二轮复习用。</p>
+      <div class="pc-meta">20 题 · 建议 30 分钟</div>
+    </div>
+    <div class="paper-card" data-paper="real">
+      <h4>真题改编卷</h4>
+      <p>按 408 真题题型改编，覆盖高频考点。</p>
+      <div class="pc-meta">40 题 · 建议 60 分钟</div>
+    </div>
+    <div class="paper-card" data-paper="mock">
+      <h4>全真模拟卷</h4>
+      <p>每章 4 题，模拟 408 综合卷的分布。</p>
+      <div class="pc-meta">20 题 · 建议 30 分钟</div>
+    </div>
+  </div>
+
+  <div id="bank-loading" class="card center" style="margin-top:18px">
+    <p style="margin:0">正在读取五章题库…</p>
+  </div>
+  <div id="bank-error" class="callout warn" style="display:none"></div>
+
+  <div id="bank-toolbar" style="display:none">
+    <div class="quiz-hud" style="position:static">
+      <div class="hud-stats" id="bank-stats"></div>
+      <div class="hud-actions">
+        <button id="bank-wrong">只看错题</button>
+        <button id="bank-fav">只看收藏</button>
+        <button id="bank-random">随机 10 题</button>
+        <button id="bank-all" class="ghost">显示全部</button>
+        <button id="bank-reset" class="ghost">重置进度</button>
+      </div>
+    </div>
+    <h2 class="sec" id="bank-anchor" style="margin-top:24px"><span id="bank-title">题目</span></h2>
+    <div id="bank-msg" class="small muted" style="margin-bottom:6px"></div>
+    <div id="bank-list"></div>
+    <div id="bank-empty" class="empty-state" style="display:none"></div>
+  </div>
+
+  <div class="callout" style="margin-top:26px">
+    <b>说明：</b>练习场通过浏览器读取本站的章节页面来组卷，因此需要以 HTTP 方式访问（GitHub Pages 线上正常）。如果你在本地直接双击 HTML 打开，请先在站点目录运行 <code class="inline">python -m http.server 8000</code>，再访问 <code class="inline">http://localhost:8000/practice.html</code>。<br>
+    答题记录与章节页共用同一份 localStorage：在练习场答过的题，回章节页会显示「上次答对/答错」；反之亦然。
+  </div>
+
+  <p class="center" style="margin-top:26px"><a class="btn ghost" href="method.html">去看备考方法论 →</a></p>
+</div>
+
+<footer>
+  408 操作系统可视化课堂 · 练习场<br>
+  <div class="pagers"><a href="index.html">总览</a><a href="ch05.html">第 5 章</a><a href="method.html">备考方法论</a></div>
+</footer>
+
+<script src="assets/app.js"></script>
+<script src="assets/practice.js"></script>
+</body>
+</html>

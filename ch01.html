@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第 1 章 计算机系统概述 · 408 操作系统可视化课堂</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<nav class="topbar"><div class="topbar-inner">
+  <a class="logo" href="index.html"><span class="dot"></span>408 操作系统可视化课堂</a>
+  <div class="nav-links">
+    <a href="index.html">总览</a><a href="ch01.html">系统概述</a><a href="ch02.html">进程与线程</a><a href="ch03.html">内存管理</a><a href="ch04.html">文件管理</a><a href="ch05.html">I/O 管理</a><a href="practice.html">练习场</a><a href="method.html">备考方法论</a><a href="resources.html">资源导航</a>
+  </div>
+  <button class="theme-btn" title="切换明暗主题">🌙</button>
+</div></nav>
+
+<div class="wrap">
+  <div class="hero">
+    <h1>第 1 章 · 计算机系统概述</h1>
+    <p>操作系统这门课的地图。先搞清楚「OS 到底管什么、它凭什么能管、用户程序怎么求它办事」，后面进程、内存、文件、I/O 四章才接得上。</p>
+    <p class="tagline">预计学习 3~4 小时 · 动画 1 集 · 实验室 1 个 · 练习 16 题 · 打卡 6 项</p>
+  </div>
+
+  <div class="toc"><span class="toc-label">本页导航</span><a href="#goal">学习目标</a><a href="#s1">OS 是什么</a><a href="#s2">四大特征</a><a href="#s3">功能</a><a href="#s4">发展与分类</a><a href="#s5">运行环境</a><a href="#s6">内核结构</a><a href="#s7">引导与虚拟机</a><a href="#deep">进阶深挖</a><a href="#lesson">动画课堂</a><a href="#lab">实验室</a><a href="#pit">避坑清单</a><a href="#quiz">章内练习</a><a href="#ck">打卡</a></div>
+
+  <div class="callout exam" id="goal"><div class="co-title">🎯 学习目标（学完你应该能）</div>
+  ① 用一句话说清 OS 是什么，并列出它的四大特征与四项资源管理功能；<br>
+  ② 区分并发与并行、中断与异常、系统调用与库函数；<br>
+  ③ 判断一条指令是不是特权指令，说清用户态/内核态为什么要分离；<br>
+  ④ 画出「用户程序 → 陷入指令 → 内核处理 → 返回用户态」的完整路径；<br>
+  ⑤ 说清大内核与微内核各自的优缺点，以及 OS 的启动过程。</div>
+
+  <h2 class="sec" id="s1">1.1 先说人话：操作系统是什么</h2>
+  <div class="callout life"><div class="co-title">🏨 生活类比</div>
+  把计算机想成一家酒店：CPU 是厨师，内存是操作台，硬盘是仓库，打印机/网卡是前台设备，顾客是用户程序。如果每个顾客都直接冲进厨房抢锅、翻仓库，场面必然失控。<b>操作系统就是酒店经理</b>：它不替顾客炒菜，但负责排班、分配操作台、登记仓库钥匙、安排设备使用顺序，并规定「顾客只能通过前台提需求」。<br><br>
+  所以 OS 不是「一个具体的程序」，而是一组<b>管理资源、提供服务、控制程序执行</b>的系统软件。</div>
+
+  <p><b>教材定义：</b>操作系统（Operating System，OS）是指控制和管理整个计算机系统的硬件与软件资源，合理地组织、调度计算机的工作与资源的分配，进而为用户和其他软件提供方便接口与环境的程序集合。它是计算机系统中最基本的<b>系统软件</b>。</p>
+
+  <h3 class="sub">三层视角，一句话记住</h3>
+  <div class="grid cols-3">
+    <div class="card"><h4 class="mini">资源管理者</h4><p>管理处理机、存储器、文件、I/O 设备。对应后面四章：进程管理、内存管理、文件管理、I/O 管理。</p></div>
+    <div class="card"><h4 class="mini">用户接口</h4><p>命令接口（命令行）、程序接口（系统调用）、图形用户界面（GUI）。用户程序不能直接碰硬件，只能请求 OS。</p></div>
+    <div class="card"><h4 class="mini">扩充机器</h4><p>裸机只认二进制和寄存器；OS 在上面铺了一层抽象，让用户看到「文件、进程、虚拟内存」这些好用的东西。</p></div>
+  </div>
+
+  <div class="callout exam"><div class="co-title">📌 408 高频：OS 的「两个最基本特征」</div>
+  408 教材普遍把 <b>并发</b> 和 <b>共享</b> 视为操作系统最基本的两个特征，二者互为存在条件：没有并发，共享没有意义；没有共享，并发无法实现。选择题常把「并发」偷换成「并行」来设错。</div>
+
+  <h2 class="sec" id="s2">1.2 四大特征：并发、共享、虚拟、异步</h2>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>特征</th><th>含义</th><th>生活类比</th><th>易错点</th></tr>
+      <tr><td><b>并发</b></td><td>两个或多个事件在<b>同一时间间隔内</b>发生。单核 CPU 上多个程序交替执行，宏观同时、微观串行。</td><td>一个人同时炒两道菜：这盘翻两下，那盘翻两下</td><td>并发 ≠ 并行。并行是同一时刻真正同时执行，需要多核/多处理机。</td></tr>
+      <tr><td><b>共享</b></td><td>系统中的资源可供内存中多个并发执行的进程共同使用。分互斥共享（打印机）和同时共享（磁盘文件、可重入代码）。</td><td>打印机一次只能一个人用；图书馆的书可以多人同时看</td><td>互斥共享的资源叫临界资源，必须互斥访问。</td></tr>
+      <tr><td><b>虚拟</b></td><td>把一个物理实体变成多个逻辑对应物。分时分复用（CPU 分时）和空分复用（虚拟内存）。</td><td>一个厨师被顾客看成「同时有好几个厨师」</td><td>虚拟是逻辑上的，不增加真实硬件。</td></tr>
+      <tr><td><b>异步</b></td><td>多道程序环境下，进程以不可预知的速度向前推进，走走停停。</td><td>炒菜时接电话，回来接着炒，节奏被打乱</td><td>异步性带来结果的不确定性，所以需要同步机制。</td></tr>
+    </table>
+  </div>
+
+  <div class="callout warn"><div class="co-title">⚠️ 并发与并行，选择题年年换皮</div>
+  <b>并发：</b>同一时间间隔内，宏观上同时发生（单核也能并发）。<br>
+  <b>并行：</b>同一时刻，真正同时发生（必须多核或多处理机）。<br>
+  经典判断：单处理机系统中，CPU 计算与 I/O 传输可以并行（不同硬件各干各的）；两个进程在同一 CPU 上只能并发，不能并行。</div>
+
+  <h2 class="sec" id="s3">1.3 OS 的功能：四管理 + 两接口</h2>
+  <div class="steps">
+    <div class="step"><b>处理机管理。</b>进程控制、进程同步、进程通信、死锁处理、处理机调度。目标：让 CPU 忙而有序。→ 第 2 章。</div>
+    <div class="step"><b>存储器管理。</b>内存分配与回收、地址映射、内存保护与共享、内存扩充（虚拟内存）。→ 第 3 章。</div>
+    <div class="step"><b>文件管理。</b>文件存储空间管理、目录管理、文件读写与保护。→ 第 4 章。</div>
+    <div class="step"><b>设备管理。</b>缓冲管理、设备分配、设备处理、虚拟设备。→ 第 5 章。</div>
+    <div class="step"><b>用户接口。</b>命令接口（联机/脱机命令）、程序接口（系统调用）、GUI。</div>
+    <div class="step"><b>扩充机器。</b>把裸机改造成功能更强、使用更方便的「虚拟机器」。</div>
+  </div>
+
+  <h3 class="sub">命令接口 vs 程序接口</h3>
+  <p><b>命令接口</b>给人在终端里用：联机命令接口（交互式，你一句它一句，如 shell）和脱机命令接口（批处理，一次写一批作业命令）。<b>程序接口</b>给程序用，核心就是<b>系统调用</b>：程序员通过库函数或直接陷入指令，请求 OS 提供内核级服务。</p>
+
+  <h2 class="sec" id="s4">1.4 发展与分类：从手工到实时</h2>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>阶段</th><th>核心做法</th><th>优点</th><th>缺点 / 考点</th></tr>
+      <tr><td>手工操作</td><td>用户独占全机，人工装纸带/卡片</td><td>无</td><td>人机矛盾突出，CPU 大量空闲</td></tr>
+      <tr><td>单道批处理</td><td>内存中只放一道作业，监控程序自动依次运行</td><td>减少人工干预，CPU 利用率略升</td><td>CPU 与 I/O 串行，内存浪费，仍无交互</td></tr>
+      <tr><td>多道批处理</td><td>内存放多道作业，CPU 与 I/O 重叠，作业调度选下一道</td><td>资源利用率高、吞吐量大</td><td>无交互、作业周转长；需要中断、通道、作业调度</td></tr>
+      <tr><td>分时系统</td><td>时间片轮转，多用户通过终端同时使用</td><td>交互性好、多路性、独立性、及时性</td><td>时间片过小切换开销大，过大响应变差</td></tr>
+      <tr><td>实时系统</td><td>按截止时间处理外部事件，分硬实时/软实时</td><td>及时、可靠、专用</td><td>硬实时错过截止时间后果严重；不追求吞吐量</td></tr>
+      <tr><td>网络/分布式/个人/嵌入式</td><td>联网共享、多机协同、面向个人/专用设备</td><td>各有所长</td><td>分布式强调透明性与自治性；嵌入式强调裁剪与实时</td></tr>
+    </table>
+  </div>
+
+  <div class="callout exam"><div class="co-title">📌 多道批处理为什么能提高利用率？</div>
+  当一道程序因 I/O 而阻塞时，CPU 立刻切换去执行另一道程序，让 CPU 与 I/O 设备重叠工作。注意：<b>多道程序的道数不是越多越好</b>——内存装不下会频繁换入换出，反而抖动。多道批处理是「并发」概念真正落地的地方，也带来了同步、死锁、保护等新问题。</div>
+
+  <h3 class="sub">分时系统的四个特点（背）</h3>
+  <p><b>多路性</b>（多个终端同时连）、<b>独立性</b>（用户彼此感觉独占）、<b>及时性</b>（较短时间得到响应）、<b>交互性</b>（人机对话）。实时系统的关键词则是<b>及时性 + 可靠性 + 截止时间</b>，硬实时必须严格满足，软实时可以偶尔超时。</p>
+
+  <h2 class="sec" id="s5">1.5 运行环境：用户态、内核态、中断、系统调用</h2>
+  <p>这是本章最核心、也是选择题最爱考的一节。先记住一条主线：<b>用户程序没有权限直接操作硬件，必须通过「陷入」进入内核，由内核代为完成。</b></p>
+
+  <h3 class="sub">1.5.1 两种状态与特权指令</h3>
+  <div class="split">
+    <div class="card">
+      <h4>用户态（目态）</h4>
+      <p>用户程序运行的状态，只能执行<b>非特权指令</b>，访问受限的内存区域。想做危险操作，只能请求 OS。</p>
+      <p class="muted small">例：算术运算、逻辑运算、取数、跳转、访存（受界地址检查）。</p>
+    </div>
+    <div class="card">
+      <h4>内核态（管态 / 核心态）</h4>
+      <p>OS 内核运行的状态，可以执行<b>特权指令</b>，访问全部硬件与内存。用户态到内核态的切换由硬件中断/异常机制完成。</p>
+      <p class="muted small">例：关中断/开中断、置时钟、修改 PSW、切换页表、加载页表基址、I/O 指令、停机。</p>
+    </div>
+  </div>
+
+  <div class="callout warn"><div class="co-title">⚠️ 状态切换的方向不能反</div>
+  <b>用户态 → 内核态：</b>只能通过中断、异常、系统调用（执行陷入指令 trap）这些「入口」，由硬件完成状态切换。用户程序不能自己写一句「我要进内核」。<br>
+  <b>内核态 → 用户态：</b>由 OS 执行一条特权指令修改程序状态字（PSW），主动返回用户态。<br>
+  陷阱题：<i>「用户态程序可以通过修改 PSW 进入内核态」</i>——错，修改 PSW 本身就是特权指令，用户态执行会触发异常。</div>
+
+  <h3 class="sub">1.5.2 中断与异常：OS 的「门铃」</h3>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>类别</th><th>来源</th><th>典型例子</th><th>特点</th></tr>
+      <tr><td><b>外中断（中断）</b></td><td>CPU 外部</td><td>I/O 完成、时钟中断、键盘输入、网络包到达</td><td>与当前指令无关，异步；分可屏蔽/不可屏蔽</td></tr>
+      <tr><td><b>内中断（异常）</b></td><td>CPU 内部，当前指令执行引起</td><td>缺页、除零、非法操作码、地址越界、系统调用（陷入）</td><td>同步；又分故障 fault、自陷 trap、终止 abort</td></tr>
+    </table>
+  </div>
+  <p>异常再细分：<b>故障（fault）</b>——如缺页，处理后可以重新执行出错指令；<b>自陷（trap）</b>——如系统调用、断点，是程序主动安排的；<b>终止（abort）</b>——如硬件故障、严重非法指令，无法恢复，只能终止进程。</p>
+
+  <div class="callout exam"><div class="co-title">📌 中断处理的标准流程（会排序）</div>
+  ① 关中断（防止现场被破坏）→ ② 保存断点（PC、PSW）→ ③ 识别中断源（查中断向量表）→ ④ 保存现场（通用寄存器等）→ ⑤ 执行中断服务程序 → ⑥ 恢复现场 → ⑦ 开中断并返回。<br>
+  注意：<b>保存断点</b>和<b>保存现场</b>不是一回事；断点由硬件保存，现场通常由中断服务程序保存。中断向量表存的是中断服务程序的入口地址。</div>
+
+  <h3 class="sub">1.5.3 系统调用：用户程序求内核办事的唯一正规渠道</h3>
+  <p>系统调用是 OS 提供给应用程序的<b>程序接口</b>，运行在内核态。用户程序执行一条<b>陷入指令（trap / 访管指令）</b>，CPU 切换到内核态，按系统调用号查表，执行对应的内核服务，完成后返回用户态。</p>
+
+  <div class="steps">
+    <div class="step"><b>传参。</b>把系统调用号与参数放入寄存器、栈或内存块（参数块地址放寄存器）。</div>
+    <div class="step"><b>陷入。</b>执行 trap 指令，硬件保存返回地址与 PSW，切换到内核态。</div>
+    <div class="step"><b>查表。</b>内核根据系统调用号在系统调用表中找到服务程序入口。</div>
+    <div class="step"><b>执行。</b>内核完成实际工作（如读文件、创建进程、分配内存），可能阻塞调用者。</div>
+    <div class="step"><b>返回。</b>恢复现场，把返回值放入寄存器，切回用户态继续执行。</div>
+  </div>
+
+  <div class="callout"><div class="co-title">🔍 系统调用 vs 库函数</div>
+  <b>系统调用</b>是内核提供的服务，执行时必然发生用户态→内核态切换，开销较大。<b>库函数</b>是用户态程序（如 C 标准库），本身不一定进内核；很多库函数只是对系统调用的封装（如 <code class="inline">printf</code> 最终可能调用 <code class="inline">write</code>）。<br>
+  所以：<i>「库函数都在内核态执行」</i>错；<i>「系统调用一定涉及状态切换」</i>对。</div>
+
+  <h2 class="sec" id="s6">1.6 内核结构：大内核、微内核、分层、模块化</h2>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>结构</th><th>做法</th><th>优点</th><th>缺点</th></tr>
+      <tr><td><b>大内核（单体内核）</b></td><td>进程管理、内存管理、文件系统、设备驱动等全部放在内核态，模块间直接函数调用</td><td>性能高，调用开销小</td><td>内核庞大、耦合重，可靠性与可维护性差，一处崩溃可能拖垮全系统</td></tr>
+      <tr><td><b>微内核</b></td><td>内核只保留进程调度、中断处理、进程通信、基本内存管理；文件系统、驱动、网络等作为用户态服务</td><td>可靠、可扩展、可移植、易维护；服务崩溃不影响内核</td><td>频繁的用户态/内核态切换与消息传递，性能开销大</td></tr>
+      <tr><td><b>分层结构</b></td><td>按层次组织，每层只依赖下一层</td><td>结构清晰、易调试</td><td>层次划分困难，跨层调用效率低</td></tr>
+      <tr><td><b>模块化</b></td><td>内核由可动态加载的模块组成</td><td>灵活、易扩展</td><td>模块间接口与依赖需严格管理</td></tr>
+      <tr><td><b>外核</b></td><td>内核只负责资源分配与保护，把硬件操作交给用户态库</td><td>减少抽象开销，灵活</td><td>用户库复杂，保护与复用难度高</td></tr>
+    </table>
+  </div>
+  <div class="callout exam"><div class="co-title">📌 微内核的「性能差」到底差在哪？</div>
+  用户程序要读文件：微内核中要「用户态 → 内核态（消息）→ 文件服务（用户态）→ 内核态 → 用户态」，多次切换 + 消息拷贝；大内核一次系统调用直接进内核完成。所以微内核是<b>用性能换可靠性与可扩展性</b>。</div>
+
+  <h2 class="sec" id="s7">1.7 OS 的引导与虚拟机</h2>
+  <h3 class="sub">1.7.1 从按下电源到 OS 跑起来</h3>
+  <div class="steps">
+    <div class="step"><b>加电自检（POST）。</b>CPU 从固定地址取指，执行 BIOS/UEFI 中的固件，检测内存、显卡、键盘等硬件。</div>
+    <div class="step"><b>读主引导记录（MBR）。</b>BIOS 把磁盘 0 号扇区（512B）读入内存。MBR 含引导代码、分区表和结束标志 <code class="inline">55AA</code>。</div>
+    <div class="step"><b>找活动分区。</b>引导代码扫描分区表，找到活动分区，读取其引导记录（分区引导程序）。</div>
+    <div class="step"><b>加载 OS 内核。</b>引导程序把内核映像装入内存，把控制权交给内核入口，内核初始化后就绪队列、内存管理、设备驱动等。</div>
+    <div class="step"><b>启动第一个进程。</b>内核创建 0 号/1 号进程（或 init/systemd），再由它拉起用户态服务与登录界面。</div>
+  </div>
+  <div class="callout exam"><div class="co-title">📌 408 常考：MBR 里有什么？</div>
+  MBR 位于磁盘<b>0 号扇区</b>，共 512 字节：引导代码（约 446B）+ 分区表（64B，每项 16B，最多 4 个主分区）+ 结束标志 <code class="inline">55AA</code>（2B）。它不属于任何一个分区，先于 OS 运行。</div>
+
+  <h3 class="sub">1.7.2 虚拟机</h3>
+  <p>虚拟机（VM）用软件模拟一台完整计算机，让多个 OS 在同一物理机上隔离运行。核心是<b>虚拟机监视器（VMM / Hypervisor）</b>。</p>
+  <div class="split">
+    <div class="card"><h4>第一类 VMM（Type-1）</h4><p>直接运行在硬件上，如 VMware ESXi、Xen、KVM（内核态）。性能好，常用于服务器/云。</p></div>
+    <div class="card"><h4>第二类 VMM（Type-2）</h4><p>运行在宿主 OS 之上，如 VirtualBox、VMware Workstation。安装方便，性能多一层开销。</p></div>
+  </div>
+  <p>虚拟机需要解决「客户 OS 也以为自己在内核态」的问题，常见做法是<b>特权级压缩</b>：把客户 OS 的内核态降级到用户态，遇到特权指令就陷入 VMM，由 VMM 模拟执行。</p>
+
+  <h2 class="sec" id="deep">🚀 进阶深挖（教材级）</h2>
+  <p class="muted">以下内容对齐汤小丹《计算机操作系统》与王道《操作系统考研复习指导》的处理深度，零基础可先跳过，二轮复习必看。</p>
+
+  <h3 class="sub">深挖 1 · 程序从源码到运行：编译、链接、装入</h3>
+  <p>源程序先经<b>编译</b>生成目标模块，再由<b>链接程序</b>把多个目标模块与库函数链接成可执行文件，最后由<b>装入程序</b>装入内存执行。链接分三种：</p>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>方式</th><th>做法</th><th>特点</th></tr>
+      <tr><td>静态链接</td><td>运行前把所有目标模块和库函数拼成一个完整可执行文件</td><td>运行快，但文件大、库更新需重新链接</td></tr>
+      <tr><td>装入时动态链接</td><td>装入内存时边装入边链接</td><td>便于模块共享与更新，实现较复杂</td></tr>
+      <tr><td>运行时动态链接</td><td>程序执行到某个模块时才链接</td><td>按需链接，节省内存，支持动态库</td></tr>
+    </table>
+  </div>
+  <p>装入也分三种：<b>绝对装入</b>（编译时已知物理地址，只适合单道）、<b>可重定位装入/静态重定位</b>（装入时一次性修改地址，运行中不能移动）、<b>动态运行时装入/动态重定位</b>（运行时由重定位寄存器把逻辑地址转成物理地址，支持内存紧凑与虚拟内存）。</p>
+
+  <h3 class="sub">深挖 2 · 为什么系统调用开销大？</h3>
+  <p>一次系统调用至少涉及：保存用户现场、切换栈与 PSW、查系统调用表、内核态执行、恢复现场、返回用户态。若涉及 I/O，还可能阻塞并触发调度。高频系统调用（如逐字节 <code class="inline">read</code>）会把大量时间花在切换上，所以要用缓冲、批量读写、<code class="inline">mmap</code> 等手段减少调用次数。这也是「微内核性能差」的根本原因。</p>
+
+  <h3 class="sub">深挖 3 · 中断与异常的判定表（做题直接套）</h3>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>事件</th><th>类别</th><th>是否切换内核态</th><th>处理完返回哪里</th></tr>
+      <tr><td>键盘输入、网卡收包</td><td>外中断</td><td>是</td><td>被中断指令的下一条</td></tr>
+      <tr><td>时钟中断</td><td>外中断</td><td>是</td><td>被中断指令的下一条（可能触发调度）</td></tr>
+      <tr><td>缺页异常</td><td>内中断 · 故障</td><td>是</td><td>重新执行引发缺页的指令</td></tr>
+      <tr><td>系统调用</td><td>内中断 · 自陷</td><td>是</td><td>陷入指令的下一条</td></tr>
+      <tr><td>整数除零</td><td>内中断 · 故障/终止</td><td>是</td><td>通常终止进程（无法恢复）</td></tr>
+      <tr><td>非法操作码</td><td>内中断 · 终止</td><td>是</td><td>终止进程</td></tr>
+    </table>
+  </div>
+
+  <h3 class="sub">深挖 4 · 多道程序系统的性能直觉</h3>
+  <p>假设一道程序在 CPU 上计算 60ms、I/O 40ms。单道串行执行两道程序需要 200ms，CPU 利用率 60%。若多道让一道的 I/O 与另一道的 CPU 重叠，理想情况下总时间接近 120ms，CPU 利用率接近 100%。但这是理想值——实际受道数、I/O 设备数量、调度开销影响。408 选择题常给「CPU 利用率」「吞吐量」让你判断多道是否一定更好：<b>道数过多会导致内存不足、换入换出频繁，利用率反而下降</b>。</p>
+
+  <div class="callout views"><div class="co-title">🌐 多源视角（不同教材的讲法）</div>
+  <ul>
+    <li><b>【汤小丹《计算机操作系统》】OS 作为资源管理者：</b>处理机、存储器、I/O 设备、文件四类资源，对应进程管理、存储管理、设备管理、文件管理。本站的四章结构就是按这条线展开的。</li>
+    <li><b>【王道《操作系统考研复习指导》】内核态/用户态的判定：</b>看「这条指令会不会影响系统整体或其他进程」。会，就是特权指令；不会，就是普通指令。比死记列表更稳。</li>
+    <li><b>【OSTEP】虚拟化三件事：</b>CPU 虚拟化（进程/调度）、内存虚拟化（地址空间/页表）、持久化（文件系统/磁盘）。与 408 的五章划分高度对应，可作为英文补充读物。</li>
+  </ul>
+  <div class="src">参考：汤小丹《计算机操作系统（第四版）》第 1 章；王道《操作系统考研复习指导》第 1 章；OSTEP 第 2~4 章</div></div>
+
+  <h2 class="sec" id="lesson">🎬 动画课堂 · 第 1 集《从按下电源到 hello world》</h2>
+  <p>点击播放，浏览器会用中文语音同步讲解每一幕。先看全局，再回读上面的细节。</p>
+  <div id="lesson-box"></div>
+
+  <h2 class="sec" id="lab">🔬 实验室：一次中断 / 系统调用发生了什么</h2>
+  <div class="lab" id="lab-irq">
+    <div class="lab-title">中断与系统调用时序器 <span class="chip">用户态 ↔ 内核态</span></div>
+    <div class="lab-desc">选择一种事件，观察 CPU 从用户态进入内核态、处理、再返回的完整路径。重点看「谁保存现场」「返回到哪条指令」。</div>
+    <div class="lab-stage">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+        <span style="font-size:13px;color:var(--ink-3)">当前状态</span>
+        <span id="irq-mode" style="font-weight:800;padding:4px 14px;border-radius:999px;background:var(--green-soft);color:var(--green)">用户态</span>
+        <span id="irq-event" style="font-size:13px;color:var(--ink-2)">等待事件…</span>
+      </div>
+      <div id="irq-steps" class="steps plain" style="margin:0"></div>
+      <div id="irq-log" class="state-log" style="display:none"></div>
+    </div>
+    <div class="lab-ctrl">
+      <button data-irq="syscall">用户程序调用 read()</button>
+      <button data-irq="clock" class="ghost">时钟中断到达</button>
+      <button data-irq="pagefault" class="ghost">访问缺页</button>
+      <button id="irq-reset" class="ghost">重置</button>
+    </div>
+    <div class="lab-note" id="irq-note">提示：系统调用是「自愿陷入」，时钟中断是「被动打断」，缺页是「执行指令时出错」。三者入口不同，但都要进内核。</div>
+  </div>
+
+  <h2 class="sec" id="pit">⚠️ 本章避坑清单</h2>
+  <div class="steps plain">
+    <div class="step">并发 ≠ 并行。单核也能并发，不能并行。</div>
+    <div class="step">用户态 → 内核态只能靠中断/异常/系统调用；内核态 → 用户态靠特权指令修改 PSW。</div>
+    <div class="step">系统调用是内核态服务，库函数是用户态代码；<code class="inline">printf</code> 不等于系统调用。</div>
+    <div class="step">缺页是内中断（故障），不是外中断；键盘输入才是外中断。</div>
+    <div class="step">微内核不是「更小所以更快」，而是更可靠但切换开销更大。</div>
+    <div class="step">MBR 在磁盘 0 号扇区，先于 OS 运行；它不等于「操作系统内核」。</div>
+  </div>
+
+  <h2 class="sec" id="quiz">📝 章内练习（16 题 · 基础 → 提高 → 真题改编）</h2>
+
+  <h3 class="sub" style="color:var(--green)">🟢 第一档 · 基础（4 题）</h3>
+
+  <div class="quiz" data-answer="B" data-diff="basic">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl basic">基础</span>练习 1 · 考点：OS 最基本特征</div>
+    操作系统最基本的两个特征是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 并发和并行</div>
+      <div class="opt" data-opt="B">B. 并发和共享</div>
+      <div class="opt" data-opt="C">C. 共享和虚拟</div>
+      <div class="opt" data-opt="D">D. 虚拟和异步</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 B。教材把并发与共享视为 OS 最基本的两个特征，二者互为存在条件：没有并发，共享没有意义；没有共享，并发无法实现。并行需要多处理机，不是 OS 的必要特征；虚拟和异步是另外两个特征，但不是「最基本」。</div>
+  </div>
+
+  <div class="quiz" data-answer="B" data-diff="basic">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl basic">基础</span>练习 2 · 考点：并发与并行</div>
+    在单处理机系统中，下列活动可以真正并行执行的是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 同一进程的两个线程同时占用 CPU</div>
+      <div class="opt" data-opt="B">B. CPU 执行计算与磁盘进行 I/O 传输</div>
+      <div class="opt" data-opt="C">C. 两个就绪进程同时运行</div>
+      <div class="opt" data-opt="D">D. 中断处理程序与用户进程同时运行</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 B。并行的本质是「同一时刻真正同时」，必须有不同的硬件部件参与。CPU 计算与磁盘 I/O 是不同部件，可以重叠；A、C、D 都要争用同一个 CPU，只能并发（交替），不能并行。</div>
+  </div>
+
+  <div class="quiz" data-answer="C" data-diff="basic">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl basic">基础</span>练习 3 · 考点：特权指令</div>
+    下列指令中，属于特权指令的是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 取数指令</div>
+      <div class="opt" data-opt="B">B. 加法指令</div>
+      <div class="opt" data-opt="C">C. 关中断指令</div>
+      <div class="opt" data-opt="D">D. 无条件转移指令</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 C。关中断会影响整个系统的中断响应，必须由内核控制。常见特权指令：关/开中断、置时钟、修改 PSW、切换页表、I/O 指令、停机、加载页表基址。取数、加法、转移都是普通指令，用户态可执行。</div>
+  </div>
+
+  <div class="quiz" data-answer="D" data-diff="basic">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl basic">基础</span>练习 4 · 考点：OS 功能</div>
+    下列功能中，<b>不属于</b>操作系统基本功能的是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 进程调度</div>
+      <div class="opt" data-opt="B">B. 内存分配与回收</div>
+      <div class="opt" data-opt="C">C. 设备分配与缓冲管理</div>
+      <div class="opt" data-opt="D">D. 把 C 源程序编译成目标代码</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 D。编译是编译器（如 gcc）的工作，属于语言处理程序，不是 OS 的资源管理功能。OS 的四大管理是处理机、存储器、文件、设备，另加用户接口与扩充机器。</div>
+  </div>
+
+  <h3 class="sub" style="color:var(--accent)">🟡 第二档 · 提高（4 题）</h3>
+
+  <div class="quiz" data-answer="C" data-diff="mid">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl mid">提高</span>练习 5 · 考点：系统调用与库函数</div>
+    下列关于系统调用与库函数的说法，正确的是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 库函数一定在内核态执行</div>
+      <div class="opt" data-opt="B">B. 系统调用一定不涉及用户态</div>
+      <div class="opt" data-opt="C">C. 系统调用必然发生用户态与内核态的切换，库函数不一定</div>
+      <div class="opt" data-opt="D">D. 库函数不能封装系统调用</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 C。系统调用由内核提供，必须切换内核态；库函数是用户态代码，可能只是纯计算（如 <code class="inline">strlen</code>），也可能内部调用系统调用（如 <code class="inline">printf</code> 最终可能调用 <code class="inline">write</code>）。A、B、D 都说反了。</div>
+  </div>
+
+  <div class="quiz" data-answer="B" data-diff="mid">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl mid">提高</span>练习 6 · 考点：中断与异常分类</div>
+    下列事件中，属于内中断（异常）的是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 键盘输入完成</div>
+      <div class="opt" data-opt="B">B. 访问的页面不在内存</div>
+      <div class="opt" data-opt="C">C. 时钟中断</div>
+      <div class="opt" data-opt="D">D. 网卡收到数据包</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 B。缺页是执行访存指令时 CPU 内部产生的异常（故障 fault），处理完会重新执行该指令。A、C、D 都来自 CPU 外部，是外中断。判断技巧：与当前指令执行相关、同步发生的，多为异常；外部设备异步通知的，多为中断。</div>
+  </div>
+
+  <div class="quiz" data-answer="A" data-diff="mid">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl mid">提高</span>练习 7 · 考点：微内核</div>
+    微内核结构的主要缺点是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 频繁的用户态/内核态切换与消息传递导致性能开销大</div>
+      <div class="opt" data-opt="B">B. 内核代码庞大，可靠性差</div>
+      <div class="opt" data-opt="C">C. 无法支持多处理机</div>
+      <div class="opt" data-opt="D">D. 不能提供进程通信机制</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 A。微内核把文件系统、驱动等移到用户态，服务之间通过消息传递，路径变长、切换变多，性能是主要代价。B 是宏内核的缺点；C、D 与微内核事实相反——微内核恰恰以进程通信为核心，且易支持多处理机。</div>
+  </div>
+
+  <div class="quiz" data-answer="C" data-diff="mid">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl mid">提高</span>练习 8 · 考点：多道批处理</div>
+    与单道批处理相比，多道批处理系统的主要优点是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 交互性更好，响应更快</div>
+      <div class="opt" data-opt="B">B. 每个作业的周转时间一定缩短</div>
+      <div class="opt" data-opt="C">C. CPU 与 I/O 设备可以重叠工作，资源利用率和吞吐量提高</div>
+      <div class="opt" data-opt="D">D. 不再需要作业调度</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 C。多道的核心就是「一道阻塞，另一道顶上」，让 CPU 与 I/O 重叠。A 是分时系统的优点，批处理恰恰缺少交互；B 不一定，多道可能让单个作业等待更久；D 多道更需要作业调度。</div>
+  </div>
+
+  <h3 class="sub" style="color:var(--brand)">🔴 第三档 · 真题改编（8 题 · 题型对标）</h3>
+
+  <div class="quiz" data-answer="B" data-diff="real" data-year="2013">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2013 题型</span>练习 9 · 考点：用户态到内核态</div>
+    下列操作中，<b>不可能</b>在用户态完成的是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 执行算术运算</div>
+      <div class="opt" data-opt="B">B. 修改程序状态字 PSW 中的状态位</div>
+      <div class="opt" data-opt="C">C. 读取用户自己的变量</div>
+      <div class="opt" data-opt="D">D. 执行一条无条件转移指令</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 B。修改 PSW 是特权指令，只能在核态执行；用户态执行会触发异常。A、C、D 都是普通指令。注意：用户态程序可以通过 trap 指令「请求」进入内核，但不能自己改 PSW 强行进入。</div>
+  </div>
+
+  <div class="quiz" data-answer="C" data-diff="real" data-year="2016">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2016 题型</span>练习 10 · 考点：中断处理顺序</div>
+    中断处理过程中，正确的操作顺序是：<br>① 保存断点 ② 关中断 ③ 识别中断源 ④ 恢复现场 ⑤ 执行中断服务程序 ⑥ 开中断返回</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. ①②③⑤④⑥</div>
+      <div class="opt" data-opt="B">B. ②③①⑤④⑥</div>
+      <div class="opt" data-opt="C">C. ②①③⑤④⑥</div>
+      <div class="opt" data-opt="D">D. ②①⑤③④⑥</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 C。标准流程：<b>关中断</b>（防止现场被破坏）→ <b>保存断点</b>（PC、PSW）→ <b>识别中断源</b>（查中断向量表）→ <b>执行中断服务程序</b>（其中保存/恢复现场）→ <b>恢复现场</b> → <b>开中断返回</b>。A 先保存断点再关中断，期间可能被新中断打断；B 在保存断点前就去识别中断源，现场还没保住；D 把执行服务程序放到识别中断源之前。</div>
+  </div>
+
+  <div class="quiz" data-answer="D" data-diff="real" data-year="2018">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2018 题型</span>练习 11 · 考点：系统调用参数传递</div>
+    用户程序向操作系统传递系统调用参数，可以采用的方式不包括：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 通过通用寄存器传递</div>
+      <div class="opt" data-opt="B">B. 通过栈传递</div>
+      <div class="opt" data-opt="C">C. 把参数块的首地址放入寄存器</div>
+      <div class="opt" data-opt="D">D. 通过修改中断向量表传递</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 D。常见三种：寄存器、栈、参数块（地址放寄存器）。中断向量表存的是中断服务程序入口，不是参数通道，用户态也改不了它。D 既不是合法方式，也涉及特权操作。</div>
+  </div>
+
+  <div class="quiz" data-answer="A" data-diff="real" data-year="2015">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2015 题型</span>练习 12 · 考点：缺页异常</div>
+    进程访问的页面不在内存中时，CPU 会产生缺页异常。该异常处理完成后，进程将：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 重新执行引发缺页的那条指令</div>
+      <div class="opt" data-opt="B">B. 从下一条指令继续执行</div>
+      <div class="opt" data-opt="C">C. 被终止</div>
+      <div class="opt" data-opt="D">D. 直接转入就绪队列，永不返回</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 A。缺页属于故障（fault），OS 把页面调入内存、更新页表后，返回用户态<b>重新执行</b>刚才那条指令，这次就能正常访问。B 是系统调用/自陷的返回方式；C 是终止类异常；D 描述错误。</div>
+  </div>
+
+  <div class="quiz" data-answer="C" data-diff="real" data-year="2011">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2011 题型</span>练习 13 · 考点：OS 引导</div>
+    关于主引导记录 MBR，下列说法正确的是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. MBR 存放在操作系统内核文件的开头</div>
+      <div class="opt" data-opt="B">B. MBR 由操作系统内核在启动后写入</div>
+      <div class="opt" data-opt="C">C. MBR 位于磁盘 0 号扇区，包含引导代码、分区表和结束标志</div>
+      <div class="opt" data-opt="D">D. MBR 的主要功能是管理文件目录</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 C。MBR 在磁盘 0 号扇区（512B），先于 OS 运行，由引导代码、分区表（最多 4 个主分区）和 55AA 结束标志组成。A、B 把「引导程序」与「内核」混为一谈；D 是文件系统的职责。</div>
+  </div>
+
+  <div class="quiz" data-answer="B" data-diff="real" data-year="2020">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2020 题型</span>练习 14 · 考点：虚拟机</div>
+    关于第一类虚拟机监视器（Type-1 VMM），下列说法正确的是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 它运行在宿主操作系统之上</div>
+      <div class="opt" data-opt="B">B. 它直接运行在硬件之上，客户 OS 运行在其上</div>
+      <div class="opt" data-opt="C">C. 它只能运行 Windows 客户机</div>
+      <div class="opt" data-opt="D">D. 它不需要特权级压缩</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 B。Type-1（裸金属）VMM 直接跑在硬件上，如 ESXi、Xen；Type-2 才跑在宿主 OS 上（VirtualBox）。客户机类型不限。虚拟机通常需要特权级压缩，让客户 OS 的特权指令陷入 VMM，所以 D 错。</div>
+  </div>
+
+  <div class="quiz" data-answer="D" data-diff="real" data-year="2022">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2022 题型</span>练习 15 · 考点：动态重定位</div>
+    采用动态运行时装入方式时，下列说法正确的是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 装入时一次性把逻辑地址改为物理地址，运行中不能移动</div>
+      <div class="opt" data-opt="B">B. 只适用于单道程序环境</div>
+      <div class="opt" data-opt="C">C. 不需要任何硬件支持</div>
+      <div class="opt" data-opt="D">D. 地址转换在指令执行时进行，需要重定位寄存器，支持程序在内存中移动</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 D。动态重定位在运行时由硬件（重定位寄存器/MMU）把逻辑地址加上基址得到物理地址，因此程序可以换出、移动，是虚拟内存的基础。A 是静态重定位；B 是绝对装入的局限；C 动态重定位必须靠硬件。</div>
+  </div>
+
+  <div class="quiz" data-answer="A" data-diff="real" data-year="2019">
+    <div class="q-head"><div class="q-tag"><span class="q-lvl real">真题改编</span><span class="q-year">2019 题型</span>练习 16 · 考点：中断与系统调用综合</div>
+    下列关于「用户程序调用系统调用」的叙述，<b>错误</b>的是：</div>
+    <div class="opts">
+      <div class="opt" data-opt="A">A. 用户程序可以直接跳转到内核的系统调用服务程序执行</div>
+      <div class="opt" data-opt="B">B. 系统调用通过陷入指令进入内核</div>
+      <div class="opt" data-opt="C">C. 系统调用处理过程中可能发生进程阻塞与调度</div>
+      <div class="opt" data-opt="D">D. 系统调用返回时要把返回值传回用户程序</div>
+    </div>
+    <div class="q-foot"><button class="btn-ans">提交答案</button><span class="q-res"></span></div>
+    <div class="q-exp"><b>解析：</b>选 A。用户程序不能直接跳到内核地址执行——那等于绕过保护机制；必须通过 trap 指令由硬件切换状态并按系统调用号查表进入。B、C、D 都正确：阻塞型系统调用（如读磁盘）会让进程阻塞并触发调度，返回时通过寄存器传返回值。</div>
+  </div>
+
+  <h2 class="sec" id="ck">✅ 本章打卡清单 <span class="progress-pill">0 / 6 已打卡</span></h2>
+  <div class="checklist" data-ck-scope>
+    <label class="check-item" data-ck="ch01-1"><input type="checkbox"><span>能用自己的话解释 OS 的「资源管理者 + 用户接口 + 扩充机器」三层视角</span></label>
+    <label class="check-item" data-ck="ch01-2"><input type="checkbox"><span>能默写并发、共享、虚拟、异步四个特征，并各举一个例子</span></label>
+    <label class="check-item" data-ck="ch01-3"><input type="checkbox"><span>能判断 5 条以上特权指令，并说清用户态/内核态的切换入口</span></label>
+    <label class="check-item" data-ck="ch01-4"><input type="checkbox"><span>能画出系统调用的 5 步流程，区分系统调用与库函数</span></label>
+    <label class="check-item" data-ck="ch01-5"><input type="checkbox"><span>能说出大内核与微内核的优缺点，以及 Type-1/Type-2 虚拟机的区别</span></label>
+    <label class="check-item" data-ck="ch01-6"><input type="checkbox"><span>完成章内 16 题，错题能说出错因并收藏/重做</span></label>
+  </div>
+
+  <p class="center" style="margin-top:28px"><a class="btn" href="ch02.html">下一章：进程与线程 →</a></p>
+</div>
+
+<footer>
+  408 操作系统可视化课堂 · 第 1 章<br>
+  <div class="pagers"><a href="index.html">总览</a><a href="ch02.html">下一章</a><a href="method.html">备考方法论</a></div>
+</footer>
+
+<script src="assets/app.js"></script>
+<script src="assets/lesson-ch01.js"></script>
+<script src="assets/lesson-player.js"></script>
+<script>
+/* 实验室：中断 / 系统调用时序 */
+(function () {
+  var STEPS = {
+    syscall: {
+      name: "用户程序调用 read()",
+      mode: "用户态",
+      steps: ["用户程序准备参数：fd、缓冲区地址、长度", "执行陷入指令 trap，系统调用号放入寄存器", "硬件保存返回地址与 PSW，切换到内核态", "内核查系统调用表，进入 read 服务程序", "若数据未就绪，进程阻塞并触发调度", "数据就绪后唤醒进程，返回值放入寄存器", "恢复现场，返回用户态继续执行下一条指令"],
+      tip: "系统调用是「自愿陷入」，返回点是陷入指令的下一条。"
+    },
+    clock: {
+      name: "时钟中断到达",
+      mode: "用户态",
+      steps: ["CPU 正在执行用户程序", "时钟设备发出中断请求", "CPU 关中断、保存断点与现场，切换到内核态", "查中断向量表，进入时钟中断服务程序", "更新进程时间片计数，必要时置调度标志", "返回用户态；若需调度，在适当时机切换进程"],
+      tip: "时钟中断是「被动打断」，与当前指令无关；返回点是被打断指令的下一条。"
+    },
+    pagefault: {
+      name: "访问缺页",
+      mode: "用户态",
+      steps: ["用户程序执行访存指令，目标页不在内存", "MMU 触发缺页异常，切换到内核态", "保存现场，查页表确认缺页", "若内存有空闲块，直接调入；否则选择牺牲页换出", "更新页表与 TLB，把页面从外存调入", "恢复现场，重新执行引发缺页的那条指令"],
+      tip: "缺页是「故障」，处理完要重新执行原指令，不是下一条。"
+    }
+  };
+  var box = document.getElementById("lab-irq");
+  if (!box) return;
+  var stepsEl = document.getElementById("irq-steps");
+  var modeEl = document.getElementById("irq-mode");
+  var eventEl = document.getElementById("irq-event");
+  var noteEl = document.getElementById("irq-note");
+  var timer = [];
+  function clearTimers() { timer.forEach(clearTimeout); timer = []; }
+  function setMode(kernel) {
+    modeEl.textContent = kernel ? "内核态" : "用户态";
+    modeEl.style.background = kernel ? "var(--brand-soft)" : "var(--green-soft)";
+    modeEl.style.color = kernel ? "var(--brand)" : "var(--green)";
+  }
+  function run(type) {
+    var cfg = STEPS[type];
+    if (!cfg) return;
+    clearTimers();
+    stepsEl.innerHTML = "";
+    cfg.steps.forEach(function (text, i) {
+      var d = document.createElement("div");
+      d.className = "step";
+      d.style.opacity = ".28";
+      d.textContent = text;
+      stepsEl.appendChild(d);
+      timer.push(setTimeout(function () {
+        var prev = stepsEl.querySelector(".step.on");
+        if (prev) { prev.classList.remove("on"); prev.style.opacity = ".55"; }
+        d.classList.add("on");
+        d.style.opacity = "1";
+        d.style.borderColor = "var(--brand)";
+        setMode(i >= 2 && i <= 5);
+      }, 620 * i));
+    });
+    eventEl.textContent = cfg.name;
+    noteEl.innerHTML = cfg.tip;
+    timer.push(setTimeout(function () { setMode(false); }, 620 * cfg.steps.length));
+  }
+  box.addEventListener("click", function (ev) {
+    var b = ev.target.closest("[data-irq]");
+    if (b) { run(b.getAttribute("data-irq")); return; }
+    if (ev.target.id === "irq-reset") {
+      clearTimers();
+      stepsEl.innerHTML = "";
+      setMode(false);
+      eventEl.textContent = "等待事件…";
+      noteEl.textContent = "提示：系统调用是「自愿陷入」，时钟中断是「被动打断」，缺页是「执行指令时出错」。三者入口不同，但都要进内核。";
+    }
+  });
+  run("syscall");
+})();
+</script>
+</body>
+</html>

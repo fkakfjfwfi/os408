@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>408 操作系统可视化课堂 · 零基础到考点</title>
+<meta name="description" content="408 考研操作系统零基础学习站：生活类比讲人话、SVG 动画课堂、交互实验室、80 题分级练习、备考方法论。">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<nav class="topbar"><div class="topbar-inner">
+  <a class="logo" href="index.html"><span class="dot"></span>408 操作系统可视化课堂</a>
+  <div class="nav-links">
+    <a href="index.html">总览</a><a href="ch01.html">系统概述</a><a href="ch02.html">进程与线程</a><a href="ch03.html">内存管理</a><a href="ch04.html">文件管理</a><a href="ch05.html">I/O 管理</a><a href="practice.html">练习场</a><a href="method.html">备考方法论</a><a href="resources.html">资源导航</a>
+  </div>
+  <button class="theme-btn" title="切换明暗主题">🌙</button>
+</div></nav>
+
+<div class="wrap">
+  <div class="hero">
+    <h1>把操作系统<span class="em">「跑」</span>给你看</h1>
+    <p>这是为 <b>408 考研零基础</b> 同学准备的操作系统学习站。每个概念先用生活里的例子讲人话，再用动画把「进程怎么切换、地址怎么翻译、页面怎么换出、磁盘怎么寻道」一帧一幕演出来，最后落到 408 考点、计算模板和配套练习。</p>
+    <p class="tagline">5 章 · 5 集动画 · 8 个交互实验室 · 80 道分级练习 · 30 项打卡 · 学习进度自动保存在本机浏览器</p>
+    <div class="hero-actions">
+      <a class="btn" href="ch01.html">从第 1 章开始 →</a>
+      <a class="btn ghost" href="method.html">先看备考方法论</a>
+      <a class="btn ghost" href="practice.html">去练习场</a>
+    </div>
+  </div>
+
+  <div class="grid cols-2" style="margin-top:20px">
+    <div class="card">
+      <h3 style="margin-bottom:8px">这个站和别的资料有什么不同</h3>
+      <p>操作系统最劝退的地方不是概念多，而是<b>看不见</b>：进程在内存里怎么排队、页表怎么多级、磁盘磁头怎么跑，书上只有静态图。本站把每个机制做成可播放、可点击、可改参数的实验室，先建立直觉，再背结论。</p>
+      <p style="margin-bottom:0">每章固定结构：<b>学习目标 → 生活类比 → 分节详解 → 计算例题 → 408 考点 → 动画课堂 → 互动实验室 → 避坑清单 → 16 题 → 打卡</b>。</p>
+    </div>
+    <div class="term">
+      <div class="term-bar"><i></i><i></i><i></i></div>
+      <div class="term-body">
+        <div><span class="prompt">boot@408:~$</span> ./load os_knowledge</div>
+        <div>[ OK ] 进程调度器已启动</div>
+        <div>[ OK ] 页表与 TLB 已就绪</div>
+        <div>[ OK ] 文件系统已挂载</div>
+        <div>[ OK ] 中断控制器已连接</div>
+        <div><span class="prompt">boot@408:~$</span> echo "先看懂，再背会" <span class="caret"></span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stat-row">
+    <div class="stat"><b>5</b><span>章 · 对齐 408 考纲</span></div>
+    <div class="stat"><b>5</b><span>集 SVG 动画课堂</span></div>
+    <div class="stat"><b>8</b><span>个可交互实验室</span></div>
+    <div class="stat"><b>80</b><span>道分级练习</span></div>
+    <div class="stat"><b>35</b><span>分 · 408 中 OS 权重</span></div>
+  </div>
+
+  <h2 class="sec">为什么这么学 <span class="en">WHY THIS WAY</span></h2>
+  <div class="grid cols-2">
+    <div class="card">
+      <h3>🗣 先说人话</h3>
+      <p>进程是「正在炒菜的一双手」，PCB 是「这盘菜的做法卡」，虚拟内存是「桌子不够大就先收进冰箱」。零基础先知道它<b>为什么存在</b>，再去看定义，才不会背了就忘。</p>
+    </div>
+    <div class="card">
+      <h3>🎬 再看它动</h3>
+      <p>进程五状态怎么迁移、页表怎么两级查、FIFO 为什么会 Belady 异常、SCAN 磁头怎么折返——全部做成可播放动画，配浏览器中文语音旁白，不用下载音频。</p>
+    </div>
+    <div class="card">
+      <h3>🔬 然后自己动手</h3>
+      <p>调度算法改时间片、页面置换换引用串、磁盘调度改磁头位置、文件索引改块大小，参数一改结果立刻变。看懂 ≠ 会算，实验室负责把公式变成手感。</p>
+    </div>
+    <div class="card">
+      <h3>🧭 最后落到考试</h3>
+      <p>每章 16 题（4 基础 / 4 提高 / 8 真题改编），练习场可跨章组卷、自动收错题、收藏、随机抽题。<a href="method.html">备考方法论</a>独立成页：35 分怎么分布、三轮怎么切、六类计算题模板。</p>
+    </div>
+  </div>
+
+  <h2 class="sec">知识体系总览 <span class="en">SYLLABUS MAP</span></h2>
+  <p class="muted">对齐 408 操作系统考纲五大部分。建议按 01 → 05 顺序学：概述是地图，进程是核心，内存与文件是两大资源管理，I/O 是收尾。</p>
+
+  <div class="grid cols-2">
+    <a class="card clickable" href="ch01.html">
+      <span class="ch-num">第 1 章 · 已上线</span>
+      <h3>计算机系统概述</h3>
+      <p>OS 是什么、管什么、怎么被启动；用户态/内核态、中断与异常、系统调用、大内核与微内核、虚拟机。</p>
+      <div class="chips"><span class="chip">OS 四大特征</span><span class="chip">中断/异常</span><span class="chip">系统调用</span><span class="chip hot">选择题必考</span></div>
+      <div class="ch-wave">🎬《从按下电源到 hello world》 · 🔬 中断与系统调用时序 · 16 题</div>
+    </a>
+    <a class="card clickable" href="ch02.html">
+      <span class="ch-num">第 2 章 · 已上线</span>
+      <h3>进程与线程</h3>
+      <p>PCB 与五状态、进程控制与通信、线程模型、调度算法、同步互斥、PV 操作、管程、死锁与银行家算法。</p>
+      <div class="chips"><span class="chip">五状态机</span><span class="chip">调度算法</span><span class="chip">PV 大题</span><span class="chip hot">全卷最高频</span></div>
+      <div class="ch-wave">🎬《一个进程的一生》 · 🔬 状态机 + 调度甘特图 · 16 题</div>
+    </a>
+    <a class="card clickable" href="ch03.html">
+      <span class="ch-num">第 3 章 · 已上线</span>
+      <h3>内存管理</h3>
+      <p>地址转换、连续分配、分页/分段/段页式、多级页表与 TLB、虚拟内存、请求分页、页面置换、抖动与工作集。</p>
+      <div class="chips"><span class="chip">页表计算</span><span class="chip">缺页率</span><span class="chip">置换算法</span><span class="chip hot">大题常客</span></div>
+      <div class="ch-wave">🎬《内存的障眼法》 · 🔬 地址转换 + 页面置换 · 16 题</div>
+    </a>
+    <a class="card clickable" href="ch04.html">
+      <span class="ch-num">第 4 章 · 已上线</span>
+      <h3>文件管理</h3>
+      <p>文件与目录、逻辑/物理结构、连续/链接/索引分配、inode 与混合索引、空闲空间管理、磁盘调度与 SSD。</p>
+      <div class="chips"><span class="chip">索引容量</span><span class="chip">FAT</span><span class="chip">位示图</span><span class="chip hot">计算题稳定</span></div>
+      <div class="ch-wave">🎬《文件的旅程》 · 🔬 磁盘调度 + 索引容量 · 16 题</div>
+    </a>
+    <a class="card clickable" href="ch05.html">
+      <span class="ch-num">第 5 章 · 已上线</span>
+      <h3>输入/输出管理</h3>
+      <p>I/O 设备与控制器、程序查询/中断/DMA/通道、I/O 软件层次、缓冲区计算、设备分配、SPOOLing、磁盘缓存。</p>
+      <div class="chips"><span class="chip">四种 I/O 方式</span><span class="chip">缓冲区</span><span class="chip">SPOOLing</span><span class="chip hot">易混概念多</span></div>
+      <div class="ch-wave">🎬《一次读盘的接力》 · 🔬 I/O 方式时间对比 · 16 题</div>
+    </a>
+    <a class="card clickable" href="practice.html">
+      <span class="ch-num">练习场 · 跨章组卷</span>
+      <h3>四套组卷 + 错题本</h3>
+      <p>基础卷、提高卷、真题改编卷、全真模拟卷；自动汇总五章题库，答错自动进错题本，支持收藏与随机 10 题。</p>
+      <div class="chips"><span class="chip new">跨章组卷</span><span class="chip">错题本</span><span class="chip">随机抽题</span></div>
+      <div class="ch-wave">建议每学完一章来一次「基础卷」自测</div>
+    </a>
+  </div>
+
+  <h2 class="sec">🎬 动画课堂（5 集） <span class="en">ANIMATED LESSONS</span></h2>
+  <p>像看视频一样自动播放：▶ 播放 / 空格暂停 / ← → 切幕 / 进度条圆点跳幕 / R 重播 / 可调倍速 / 语音开关。每集是该章的逻辑主线，先看动画建立全局图景，再读教材级详解。</p>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <tr><th>集数</th><th>片名</th><th>所在章节</th><th>逻辑主线</th></tr>
+      <tr><td>第 1 集</td><td>《从按下电源到 hello world》</td><td><a href="ch01.html#lesson">第 1 章 系统概述</a></td><td>裸机 → 引导 → 内核 → 用户态 → 系统调用陷入 → 中断返回</td></tr>
+      <tr><td>第 2 集</td><td>《一个进程的一生》</td><td><a href="ch02.html#lesson">第 2 章 进程与线程</a></td><td>程序变进程 → PCB → 五状态 → 调度 → 线程 → PV → 死锁</td></tr>
+      <tr><td>第 3 集</td><td>《内存的障眼法》</td><td><a href="ch03.html#lesson">第 3 章 内存管理</a></td><td>地址空间 → 分页 → 页表转换 → TLB → 缺页 → 置换 → 抖动</td></tr>
+      <tr><td>第 4 集</td><td>《文件的旅程》</td><td><a href="ch04.html#lesson">第 4 章 文件管理</a></td><td>文件抽象 → 目录 → 三种分配 → inode → 位示图 → 磁盘调度</td></tr>
+      <tr><td>第 5 集</td><td>《一次读盘的接力》</td><td><a href="ch05.html#lesson">第 5 章 I/O 管理</a></td><td>设备 → 控制器 → 查询 → 中断 → DMA → 通道 → 缓冲/SPOOLing</td></tr>
+    </table>
+  </div>
+
+  <h2 class="sec">学习路径（零基础） <span class="en">ROADMAP</span></h2>
+  <div class="steps">
+    <div class="step"><b>第 0 步 · 先认清战场。</b>408 中操作系统约 <b>35 分</b>（选择题约 20 分 + 综合题约 15 分），是四科里「投入产出比」很高的一科：概念成体系、计算题套路固定。它不是背出来的，是「画会 + 算会」的。</div>
+    <div class="step"><b>第 1 步 · 按 01 → 05 过章。</b>每章先看动画课堂（全局图景）→ 读零基础讲解（生活类比）→ 读考点与例题 → 动手玩实验室 → 做章内 16 题 → 完成打卡清单。</div>
+    <div class="step"><b>第 2 步 · 去练习场组卷。</b>按「基础卷 → 提高卷 → 真题改编卷 → 全真模拟卷」推进；答错的题自动进错题本，用「只看错题」重做，用「随机 10 题」防背题。</div>
+    <div class="step"><b>第 3 步 · 配合教材与网课。</b>本站当作「看不懂时的可视化字典」：王道《操作系统考研复习指导》打底，汤小丹《计算机操作系统》补原理，网课跟一遍即可，别在视频里感动自己。资源见<a href="resources.html">资源导航</a>。</div>
+    <div class="step"><b>第 4 步 · 方法先行。</b>先读一遍<a href="method.html">备考方法论</a>：三轮怎么切、错题本三栏怎么写、PV 与页表大题怎么按采分点拿分。方法错了，投入全废。</div>
+  </div>
+
+  <h2 class="sec">📌 使用说明 <span class="en">HOW TO USE</span></h2>
+  <div class="callout">
+    ① 每章结构固定：学习目标 → 生活类比 → 分节详解 → 计算例题 → 408 考点 → 动画课堂 → 实验室 → 避坑清单 → 16 题 → 打卡；<br>
+    ② 打卡与答题进度存在浏览器 localStorage，换页面不丢；清除浏览器数据会重置；<br>
+    ③ 动画语音使用浏览器内置中文 TTS，若你的环境没有中文语音，动画与字幕仍可正常使用；<br>
+    ④ 练习场的跨章组卷需要浏览器允许读取本站其他页面（GitHub Pages 线上环境正常；本地直接双击 HTML 请先起一个本地服务器）。
+  </div>
+
+  <h2 class="sec">打卡总览 <span class="en">CHECK-IN</span></h2>
+  <div class="card" data-ck-scope>
+    <p style="margin-bottom:10px"><span class="progress-pill">0 / 0 已打卡</span> <span class="muted small">全站共 30 项，完成一章点一章</span></p>
+    <p class="muted small" style="margin:0">打卡状态与各章清单联动：在章节页勾选后，回到这里会自动更新。</p>
+  </div>
+  <p class="center" style="margin-top:14px"><span class="progress-pill" data-ck-total="30">0 / 30 项已打卡</span></p>
+
+  <p class="center" style="margin-top:34px">
+    <a class="btn" href="ch01.html">开始学习 第 1 章 →</a>
+    <a class="btn ghost" href="practice.html">去练习场 →</a>
+  </p>
+</div>
+
+<footer>
+  408 操作系统可视化课堂 · 零基础讲解 + 可视化动画 + 交互实验室 + 考点练习<br>
+  <span class="small">内容对齐 408 考纲与王道/汤小丹教材体系；真题类题目为题型改编，不冒充原题。</span>
+  <div class="pagers"><a href="index.html">总览</a><a href="ch01.html">第 1 章</a><a href="method.html">备考方法论</a><a href="resources.html">资源导航</a></div>
+</footer>
+
+<script src="assets/app.js"></script>
+</body>
+</html>
